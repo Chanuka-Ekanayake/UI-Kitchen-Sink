@@ -1,3 +1,8 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-primary: #008000;
+  --color-brand-error: #FF0000;
+}
+
 /* Add custom extensions below if necessary */
