@@ -6,13 +6,22 @@ import manifest from './manifest.config'
 
 export default defineConfig({
   plugins: [
-    react(),
+    react(), // React must be first for Fast Refresh
     tailwindcss(),
     crx({ manifest }),
   ],
   resolve: {
     alias: {
       '@': '/src',
+    },
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    // CRITICAL: Explicitly define the HMR host
+    hmr: {
+      host: 'localhost',
+      protocol: 'ws',
     },
   },
 })
