@@ -1,8 +1,16 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "types": [
+      "chrome",
+      "vite/client"
+    ],
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": false,
@@ -17,9 +25,15 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
-  "include": ["src", "manifest.config.ts", "vite.config.ts"],
+  "include": [
+    "src",
+    "manifest.config.ts",
+    "vite.config.ts"
+  ],
   "references": []
 }
