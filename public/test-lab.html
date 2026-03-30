@@ -100,10 +100,99 @@
         </section>
 
         <!-- Placeholder Sections -->
-        <section id="section-buttons" class="mb-12 opacity-50">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4">Buttons</h2>
-            <div class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
-                <p class="text-gray-500 font-medium">Pending implementation (Task ST-1.2.B)</p>
+        <section id="section-buttons" class="mb-16">
+            <header class="mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">Buttons (The Action Suite)</h2>
+                <p class="text-sm text-gray-500 mt-1">Testing Computed Styles for background colors, borders, and border-radius.</p>
+            </header>
+            
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <!-- Standard / Pass Cases -->
+                <div class="border border-green-200 rounded-xl p-6 bg-green-50/50 shadow-sm">
+                    <h3 class="text-lg font-semibold text-green-800 mb-5 pb-3 border-b border-green-200 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Standard (Pass Case)
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <!-- Standard Primary -->
+                        <div class="border-l-4 border-green-400 pl-4 py-2">
+                            <h4 class="text-sm font-medium text-gray-700 mb-3">Primary Button</h4>
+                            <div class="flex flex-wrap items-end gap-4 mb-2">
+                                <button class="btn-primary bg-[#008000] text-[#ffffff] rounded-[5px] px-[20px] py-[10px] font-[600]">Standard Primary</button>
+                            </div>
+                        </div>
+
+                        <!-- Standard Secondary -->
+                        <div class="border-l-4 border-green-400 pl-4 py-2">
+                            <h4 class="text-sm font-medium text-gray-700 mb-3">Secondary Button</h4>
+                            <div class="flex flex-wrap items-end gap-4 mb-2">
+                                <!-- Using ring for border or border classes as per Tailwind v4 -->
+                                <button class="btn-secondary bg-transparent border-2 border-solid border-[#008000] text-[#008000] rounded-[5px] px-[20px] py-[10px] font-[600]">Standard Secondary</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deviation / Fail Cases -->
+                <div class="border border-red-200 rounded-xl p-6 bg-red-50/50 shadow-sm">
+                    <h3 class="text-lg font-semibold text-red-800 mb-5 pb-3 border-b border-red-200 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        Deviation (Fail Case)
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <!-- Failing Color -->
+                        <div class="border-l-4 border-red-400 pl-4 py-2">
+                            <div class="flex flex-wrap items-center justify-between gap-4">
+                                <button class="btn-primary" style="background-color: #059669; color: #ffffff; border-radius: 5px; padding: 10px 20px; font-weight: 600; border: none;">Failing Color</button>
+                                <span class="text-xs text-red-700 font-mono bg-red-100 border border-red-200 px-2 py-1 rounded inline-block">Expected: #008000 | Actual: #059669</span>
+                            </div>
+                        </div>
+
+                        <!-- Failing Radius -->
+                        <div class="border-l-4 border-red-400 pl-4 py-2">
+                            <div class="flex flex-wrap items-center justify-between gap-4">
+                                <button class="btn-primary" style="background-color: #008000; color: #ffffff; border-radius: 12px; padding: 10px 20px; font-weight: 600; border: none;">Failing Radius</button>
+                                <span class="text-xs text-red-700 font-mono bg-red-100 border border-red-200 px-2 py-1 rounded inline-block">Expected: 5px | Actual: 12px</span>
+                            </div>
+                        </div>
+
+                        <!-- Failing Padding -->
+                        <div class="border-l-4 border-red-400 pl-4 py-2">
+                            <div class="flex flex-wrap items-center justify-between gap-4">
+                                <button class="btn-primary" style="background-color: #008000; color: #ffffff; border-radius: 5px; padding: 5px 10px; font-weight: 600; border: none;">Failing Padding</button>
+                                <span class="text-xs text-red-700 font-mono bg-red-100 border border-red-200 px-2 py-1 rounded inline-block">Expected: 10px 20px | Actual: 5px 10px</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State Testing Cases -->
+                <div class="border border-blue-200 rounded-xl p-6 bg-blue-50/50 shadow-sm xl:col-span-2">
+                    <h3 class="text-lg font-semibold text-blue-800 mb-5 pb-3 border-b border-blue-200 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        State Testing
+                    </h3>
+
+                    <div class="flex flex-wrap gap-12">
+                        <!-- Disabled Button -->
+                        <div class="border-l-4 border-blue-400 pl-4 py-2">
+                            <h4 class="text-sm font-medium text-gray-700 mb-3">Disabled State</h4>
+                            <div class="flex flex-wrap items-end gap-4">
+                                <button class="btn-disabled" disabled style="background-color: #e5e7eb; color: #9ca3af; border-radius: 5px; padding: 10px 20px; border: none; font-weight: 600; cursor: not-allowed;">Disabled Button</button>
+                            </div>
+                        </div>
+
+                        <!-- Ghost Button -->
+                        <div class="border-l-4 border-blue-400 pl-4 py-2">
+                            <h4 class="text-sm font-medium text-gray-700 mb-3">Ghost Button</h4>
+                            <div class="flex flex-wrap items-end gap-4">
+                                <button class="btn-ghost" style="border: none; background: none; color: #008000; padding: 10px 20px; font-weight: 600;">Ghost Button</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
