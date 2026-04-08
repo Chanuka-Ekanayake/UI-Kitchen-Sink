@@ -2,109 +2,96 @@ import { ValidationResult, PropertyResult, ScannerMessage } from '../shared/type
 import { ComponentStandard } from '../shared/schema';
 import { isStyleMatch } from '../shared/normalizer';
 
-console.log('UI Validator Core active on:', window.location.href);
+(window as any).__UI_VALIDATOR_LOADED__ = true;
+console.log('UI Validator Content Script Loaded');
+console.log('Content script loaded on', window.location.href);
 
 /**
- * Executes a full UI standardization audit against the live DOM.
- * Built with purely read-only functional boundaries to prevent layout thrashing and maintain 60fps performance tracking.
+ * Scrapes the DOM comparing existing live elements to their required standard specification.
  * 
- * @param standards The array of ComponentStandards determining rules logic
- * @returns Array of precise ValidationResult components
+ * @param standards - The array of ComponentStandards mapping properties to rules
+ * @returns Array of precise ValidationResults constructed via the comparison matrix
  */
 function runAudit(standards: ComponentStandard[]): ValidationResult[] {
   const startTime = performance.now();
-  const results: ValidationResult[] = [];
+  const evaluationResults: ValidationResult[] = [];
 
   for (const standard of standards) {
     let elements: NodeListOf<Element>;
-    
+
     try {
-      // Selector phase bounds explicitly trapped 
       elements = document.querySelectorAll(standard.selector);
-    } catch (e) {
-      console.warn(`[UI Validator] Invalid selector trapped/skipped: ${standard.selector}`);
+    } catch (err) {
+      console.warn(`Scanner: Invalid selector encountered -> ${standard.selector}`);
       continue;
     }
 
-    // Gracefully bypass if targets are missing from standard compliance requirements
-    if (elements.length === 0) {
-      continue;
-    }
+    if (elements.length === 0) continue;
 
+    // Batching loop mapping: Read-only phase evaluating live computed constraints
     elements.forEach((element, index) => {
-      // Lock extraction to the specific element context
-      const el = element as Element;
-      
-      // 1. Batch Extraction & Access Simulation (Read-Only)
-      const computedStyles = window.getComputedStyle(el);
-      
-      // 2. Compute Style Evaluation Logic per Standard Definition
+      const computedStyles = window.getComputedStyle(element);
       const propertyResults: PropertyResult[] = [];
       let passedCount = 0;
-      const definedProperties = Object.keys(standard.styles);
-      const totalProps = definedProperties.length;
 
-      for (const propName of definedProperties) {
-        const rule = standard.styles[propName];
-        
-        // CSS Property Lookup string retrieval directly from browser tree
-        const actualValue = computedStyles.getPropertyValue(propName);
-        const expectedValue = rule.expectedValue;
-        
-        // Dynamic Normalization Branch matching
-        const passed = isStyleMatch(actualValue, expectedValue, propName);
-        
+      const propertiesToTest = Object.keys(standard.styles);
+      const totalProperties = propertiesToTest.length;
+
+      for (const property of propertiesToTest) {
+        const rule = standard.styles[property];
+        const actualValue = computedStyles.getPropertyValue(property) || '';
+
+        const passed = isStyleMatch(actualValue, rule.expectedValue, property);
+
         if (passed) {
           passedCount++;
         }
 
         propertyResults.push({
-          property: propName,
-          expected: expectedValue,
+          property,
+          expected: rule.expectedValue,
           actual: actualValue,
-          passed: passed,
-          severity: rule.severity
+          passed,
+          severity: rule.severity,
         });
       }
 
-      // 3. Mathematical Grade Compilation out of 100 scaling
-      const score = totalProps > 0 ? Math.round((passedCount / totalProps) * 100) : 100;
-      
-      // Assemble and push final identity metadata mapped mapping securely attached node coordinates
-      results.push({
-        elementSelector: `${standard.selector} [Instance ${index + 1}]`,
+      // Calculate an individual Component Score for each element based on the ratio
+      const calculatedScore = totalProperties > 0 ? Math.round((passedCount / totalProperties) * 100) : 100;
+
+      // Generate a unique identifier for the elementSelector instance
+      const uniqueSelector = `${standard.selector}[${index}]`;
+
+      evaluationResults.push({
+        elementSelector: uniqueSelector,
         componentName: standard.name,
         results: propertyResults,
-        score: score
+        score: calculatedScore,
       });
     });
   }
 
-  // 4. Performance Audit Logging Hook ensuring transparent metric feedback loops
   const endTime = performance.now();
-  console.log(`[UI Validator] Real-time DOM Extraction cycle complete: ${(endTime - startTime).toFixed(3)}ms. Evaluated ${results.length} unique nodes.`);
+  console.log(`UI Scanner complete. Full DOM audit performed in ${(endTime - startTime).toFixed(2)}ms.`);
 
-  return results;
+  return evaluationResults;
 }
 
 chrome.runtime.onMessage.addListener(
   (request: ScannerMessage, sender, sendResponse: (response: ValidationResult[]) => void) => {
     if (request.action === 'START_SCAN') {
-      console.log('Sidepanel invoked extraction target constraint logic...');
-      
-      try {
-        // Execute primary runAudit synchronous phase
-        const auditResults = runAudit(request.standards);
-        // Safely transmit resulting evaluation
-        sendResponse(auditResults);
-      } catch (error) {
-        console.error('[UI Validator] Critical failure during extraction execution phase:', error);
-      }
-      
-      // Maintain architectural open message connection bridging
-      return true;
+      console.log('Received START_SCAN payload initiating the DOM engine...');
+
+      // Block execution sequence resolving DOM trees actively
+      const auditFindings = runAudit(request.standards);
+
+      // Async Handshake resolution back to the Sidepanel
+      sendResponse(auditFindings);
+
+      return true; // Keeps the message channel open for the async handshake paradigm
     }
   }
 );
 
-export {};
+export { };
+
