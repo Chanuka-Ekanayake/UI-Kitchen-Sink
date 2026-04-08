@@ -34,12 +34,14 @@ export default function App() {
         console.log('Content script missing. Injecting manually...');
         setStatus('Injecting content script...');
         
+        const injectionPath = 'src/content/index.ts-loader.js';
+        
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['src/content/index.ts-loader.js']
+          files: [injectionPath]
         }).catch(err => {
           console.warn('Manual injection error:', err);
-          console.warn('CRITICAL: The injected file must be the bundled JS from the dist directory (e.g. src/content/index.ts-loader.js). It cannot be the raw .ts file.');
+          console.warn(`CRITICAL: Failed trying to load path: ${injectionPath}. Check dist/manifest.json to verify the exact build artifact name.`);
         });
 
         // Give the script a moment to evaluate
