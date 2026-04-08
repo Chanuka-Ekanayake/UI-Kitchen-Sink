@@ -7,6 +7,56 @@ console.log('UI Validator Content Script Loaded');
 console.log('Content script loaded on', window.location.href);
 
 /**
+ * Calculates a precise component score based on weighted severity of passed rules.
+ * 
+ * @param results - Array of evaluated property results
+ * @returns A whole integer percentage clamped between 0 and 100
+ */
+function calculateComponentScore(results: PropertyResult[]): number {
+  if (results.length === 0) return 0;
+  
+  let totalWeight = 0;
+  let passedWeight = 0;
+  
+  for (const result of results) {
+    const weight = result.severity === 'error' ? 3 : 1;
+    totalWeight += weight;
+    if (result.passed) {
+      passedWeight += weight;
+    }
+  }
+  
+  if (totalWeight === 0) return 100;
+  
+  const score = Math.round((passedWeight / totalWeight) * 100);
+  return Math.max(0, Math.min(100, score));
+}
+
+/**
+ * Reconstructs standard CSS shorthand properties from computed longhand variants.
+ */
+function getResolvedStyle(computedStyles: CSSStyleDeclaration, property: string): string {
+  const val = computedStyles.getPropertyValue(property) || (computedStyles as any)[property];
+  if (val) return val;
+
+  // Resolve Shorthands
+  if (property === 'padding') {
+    return `${computedStyles.paddingTop} ${computedStyles.paddingRight} ${computedStyles.paddingBottom} ${computedStyles.paddingLeft}`;
+  }
+  if (property === 'margin') {
+    return `${computedStyles.marginTop} ${computedStyles.marginRight} ${computedStyles.marginBottom} ${computedStyles.marginLeft}`;
+  }
+  if (property === 'border') {
+    return `${computedStyles.borderTopWidth || computedStyles.borderWidth} ${computedStyles.borderTopStyle || computedStyles.borderStyle} ${computedStyles.borderTopColor || computedStyles.borderColor}`;
+  }
+  if (property === 'border-radius') {
+    return `${computedStyles.borderTopLeftRadius} ${computedStyles.borderTopRightRadius} ${computedStyles.borderBottomRightRadius} ${computedStyles.borderBottomLeftRadius}`;
+  }
+  
+  return '';
+}
+
+/**
  * Scrapes the DOM comparing existing live elements to their required standard specification.
  * 
  * @param standards - The array of ComponentStandards mapping properties to rules
@@ -32,20 +82,16 @@ function runAudit(standards: ComponentStandard[]): ValidationResult[] {
     elements.forEach((element, index) => {
       const computedStyles = window.getComputedStyle(element);
       const propertyResults: PropertyResult[] = [];
-      let passedCount = 0;
 
       const propertiesToTest = Object.keys(standard.styles);
-      const totalProperties = propertiesToTest.length;
 
       for (const property of propertiesToTest) {
         const rule = standard.styles[property];
-        const actualValue = computedStyles.getPropertyValue(property) || '';
+        if (!rule || rule.expectedValue == null) continue;
+
+        const actualValue = getResolvedStyle(computedStyles, property);
 
         const passed = isStyleMatch(actualValue, rule.expectedValue, property);
-
-        if (passed) {
-          passedCount++;
-        }
 
         propertyResults.push({
           property,
@@ -56,8 +102,8 @@ function runAudit(standards: ComponentStandard[]): ValidationResult[] {
         });
       }
 
-      // Calculate an individual Component Score for each element based on the ratio
-      const calculatedScore = totalProperties > 0 ? Math.round((passedCount / totalProperties) * 100) : 100;
+      // Compute Weighted Severity calculation ratio
+      const calculatedScore = calculateComponentScore(propertyResults);
 
       // Generate a unique identifier for the elementSelector instance
       const uniqueSelector = `${standard.selector}[${index}]`;
