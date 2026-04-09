@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ValidationResult, ScannerMessage, ComponentBlock } from '../shared/types';
-import { MOCK_STANDARDS } from '../shared/schema';
+import { ValidationResult, ScannerMessage, ComponentBlock, ComponentStandard } from '../shared/types';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
@@ -14,7 +13,20 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('HOME');
   const [results, setResults] = useState<ValidationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Default to empty; useEffect hydrator pulls overrides securely natively
   const [components, setComponents] = useState<ComponentBlock[]>([]);
+
+  useEffect(() => {
+    chrome.storage.local.get('ui_components_data', (result) => {
+      if (result.ui_components_data && Array.isArray(result.ui_components_data)) {
+        setComponents(result.ui_components_data);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    chrome.storage.local.set({ ui_components_data: components });
+  }, [components]);
 
   const addComponent = () => {
     const newBlock: ComponentBlock = {
@@ -86,11 +98,47 @@ export default function App() {
           files: [injectionPath]
         }).catch(err => {
           console.warn('Manual injection error:', err);
-          console.warn(`CRITICAL: Failed trying to load path: ${injectionPath}. Check dist/manifest.json to verify the exact build artifact name.`);
         });
 
         // Give the script a moment to evaluate
         await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      const mapStateToScannerFormat = (blocks: ComponentBlock[]): ComponentStandard[] => {
+        return blocks.map(block => {
+          let selectorStr = block.htmlTag;
+          if (block.cssClass) selectorStr += `.${block.cssClass}`;
+          if (block.cssId) selectorStr += `#${block.cssId}`;
+    
+          const mappedStyles: Record<string, { expectedValue: string; severity: 'error' | 'warning' }> = {};
+          block.styleRules.forEach(rule => {
+            if (rule.property.trim() && rule.value.trim()) {
+              mappedStyles[rule.property] = {
+                expectedValue: rule.value.trim(),
+                severity: rule.severity
+              };
+            }
+          });
+    
+          return {
+            id: block.id,
+            name: block.name,
+            selector: selectorStr,
+            styles: mappedStyles
+          };
+        });
+      };
+
+      const dynamicStandards = mapStateToScannerFormat(components);
+
+      // Pre-Scan Syntax Verification bounding limits targeting standard error tracking UI
+      for (const std of dynamicStandards) {
+        try {
+          // Native validation mimicking DOM checks blocking malformed queries escaping
+          document.createDocumentFragment().querySelector(std.selector);
+        } catch (e) {
+          throw new Error(`Invalid Selector Computed: "${std.selector}" for component "${std.name}". Please map legitimate bounds.`);
+        }
       }
 
       // 2. Retry Logic (Max 3 attempts)
@@ -100,7 +148,7 @@ export default function App() {
 
       while (attempts < 3) {
         try {
-          response = await sendTabMessage<ValidationResult[]>('START_SCAN', { standards: MOCK_STANDARDS });
+          response = await sendTabMessage<ValidationResult[]>('START_SCAN', { standards: dynamicStandards });
           break; // Success! Break out of the loop
         } catch (err) {
           attempts++;
