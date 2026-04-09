@@ -3,20 +3,24 @@ import { ValidationResult, ScannerMessage } from '../shared/types';
 import { MOCK_STANDARDS } from '../shared/schema';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
+import { MainLayout } from './components/MainLayout';
+
+type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
 
 export default function App() {
+  const [currentView, setCurrentView] = useState<ViewState>('HOME');
   const [results, setResults] = useState<ValidationResult[] | null>(null);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const clearResults = () => {
     setResults(null);
     setError(null);
+    setCurrentView('HOME');
   };
 
   const handleScan = async () => {
     try {
-      setIsScanning(true);
+      setCurrentView('SCANNING');
       setError(null);
       setResults(null);
 
@@ -88,85 +92,94 @@ export default function App() {
 
       console.log('Received ValidationResult[] from content script:', response);
       setResults(response);
-      setIsScanning(false);
+      setCurrentView('RESULTS');
     } catch (err) {
       console.error('Handshake/Scan error:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-      setIsScanning(false);
+      setCurrentView('ERROR');
     }
   };
 
-  const renderContent = () => {
-    // View 2: Loading State
-    if (isScanning) {
-      return (
-        <div className="flex flex-col items-center justify-center py-8 opacity-100 transition-opacity duration-300">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#008000] mb-4"></div>
-          <p className="text-sm text-gray-500 font-medium">Scanning in progress...</p>
-        </div>
-      );
-    }
-
-    // View 4: Error State
-    if (error !== null) {
-      return (
-        <div className="flex flex-col items-center w-full opacity-100 transition-opacity duration-300">
-          <div className="bg-red-50 text-red-700 p-4 rounded-md w-full mb-4 text-sm break-words border border-red-200">
-            {error}
+  const renderContentView = () => {
+    switch (currentView) {
+      case 'SCANNING':
+        return (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#008000] mb-4"></div>
+            <p className="text-sm text-gray-500 font-medium">Scanning in progress...</p>
           </div>
-          <button
-            onClick={clearResults}
-            className="text-[#008000] hover:text-[#006000] font-medium text-sm border border-[#008000] hover:bg-green-50 rounded-md px-4 py-2 transition-all w-full"
-          >
-            Try Again
-          </button>
-        </div>
-      );
-    }
+        );
 
-    // View 3: Dashboard View
-    if (results !== null) {
-      return (
-        <div className="w-full opacity-100 transition-opacity duration-300 flex flex-col">
-          <GlobalSummary results={results} />
-          
-          <div className="flex-1 w-full mb-4 overflow-y-auto max-h-[400px] pr-2 pb-1 scrollbar-thin">
-            {results.map((result, idx) => (
-              <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
-            ))}
+      case 'ERROR':
+        return (
+          <div className="flex flex-col items-center w-full">
+            <div className="bg-red-50 text-red-700 p-4 rounded-md w-full mb-4 text-sm break-words border border-red-200">
+              {error}
+            </div>
+            <button
+              onClick={clearResults}
+              className="text-[#008000] hover:text-[#006000] font-medium text-sm border border-[#008000] hover:bg-green-50 rounded-md px-4 py-2 transition-all w-full"
+            >
+              Try Again
+            </button>
           </div>
+        );
 
-          <button
-            onClick={clearResults}
-            className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
-          >
-            Clear Results
-          </button>
-        </div>
-      );
+      case 'RESULTS':
+        if (!results) return null;
+        return (
+          <div className="w-full h-full min-h-0 flex flex-col">
+            <div className="shrink-0 w-full flex justify-center">
+              <GlobalSummary results={results} />
+            </div>
+            
+            <div className="flex-1 w-full min-h-0 mb-4 overflow-y-auto pr-2 pb-1 scrollbar-thin rounded-xl">
+              {results.map((result, idx) => (
+                <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
+              ))}
+            </div>
+
+            <div className="shrink-0 w-full mt-auto pt-2">
+              <button
+                onClick={clearResults}
+                className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
+              >
+                Clear Results
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'HOME':
+      default:
+        return (
+          <div className="w-full">
+            <button
+              onClick={handleScan}
+              className="bg-[#008000] hover:bg-[#006000] text-white font-medium py-2.5 px-6 rounded-md transition-all shadow-sm active:scale-95 w-full mt-4"
+            >
+              Scan Page
+            </button>
+          </div>
+        );
     }
+  };
 
-    // View 1: Home View (Empty State)
-    return (
-      <div className="w-full opacity-100 transition-opacity duration-300">
-        <button
-          onClick={handleScan}
-          className="bg-[#008000] hover:bg-[#006000] text-white font-medium py-2.5 px-6 rounded-md transition-all shadow-sm active:scale-95 w-full"
-        >
-          Scan Page
-        </button>
-      </div>
-    );
+  const getViewTitle = () => {
+    switch (currentView) {
+      case 'HOME': return 'Ready';
+      case 'SCANNING': return 'Analyzing UI...';
+      case 'RESULTS': return 'Audit Report';
+      case 'ERROR': return 'Scan Failed';
+      default: return '';
+    }
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen flex flex-col items-center justify-center font-sans tracking-wide">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center max-w-sm w-full transition-all duration-300">
-        <h1 className="text-xl font-medium text-gray-800 mb-6 text-center">
-          UI Standardization Scanner
-        </h1>
-        {renderContent()}
+    <MainLayout title={getViewTitle()}>
+      <div className="w-full h-full transition-all duration-300 ease-in-out opacity-100 flex flex-col min-h-0">
+        {renderContentView()}
       </div>
-    </div>
+    </MainLayout>
   );
 }
