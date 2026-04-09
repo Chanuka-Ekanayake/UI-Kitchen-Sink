@@ -71,7 +71,7 @@ $$Score = \sum \left( \frac{\text{Passed Rules}}{\text{Total Rules}} \times \tex
 1.  **Clone the repo:**
     ```bash
     git clone https://github.com/your-username/ui-validator.git
-    cd ui-validator
+    cd UI-Kitchen-Sink
     ```
 2.  **Install dependencies:**
     ```bash
