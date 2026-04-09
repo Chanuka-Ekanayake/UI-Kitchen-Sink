@@ -1,5 +1,13 @@
 import { ComponentStandard } from './schema';
 
+export interface ComponentBlock {
+  id: string;
+  name: string;
+  htmlTag: string;
+  cssClass: string;
+  cssId: string;
+}
+
 export interface PropertyResult {
   property: string;
   expected: string;
