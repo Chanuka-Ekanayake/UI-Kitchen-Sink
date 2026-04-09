@@ -3,6 +3,7 @@ import { ValidationResult, ScannerMessage } from '../shared/types';
 import { MOCK_STANDARDS } from '../shared/schema';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
+import { MainLayout } from './components/MainLayout';
 
 export default function App() {
   const [results, setResults] = useState<ValidationResult[] | null>(null);
@@ -127,21 +128,25 @@ export default function App() {
     // View 3: Dashboard View
     if (results !== null) {
       return (
-        <div className="w-full opacity-100 transition-opacity duration-300 flex flex-col">
-          <GlobalSummary results={results} />
+        <div className="w-full h-full min-h-0 opacity-100 transition-opacity duration-300 flex flex-col">
+          <div className="shrink-0 w-full flex justify-center">
+            <GlobalSummary results={results} />
+          </div>
           
-          <div className="flex-1 w-full mb-4 overflow-y-auto max-h-[400px] pr-2 pb-1 scrollbar-thin">
+          <div className="flex-1 w-full min-h-0 mb-4 overflow-y-auto pr-2 pb-1 scrollbar-thin rounded-xl">
             {results.map((result, idx) => (
               <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
             ))}
           </div>
 
-          <button
-            onClick={clearResults}
-            className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
-          >
-            Clear Results
-          </button>
+          <div className="shrink-0 w-full mt-auto pt-2">
+            <button
+              onClick={clearResults}
+              className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
+            >
+              Clear Results
+            </button>
+          </div>
         </div>
       );
     }
@@ -160,13 +165,8 @@ export default function App() {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen flex flex-col items-center justify-center font-sans tracking-wide">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center max-w-sm w-full transition-all duration-300">
-        <h1 className="text-xl font-medium text-gray-800 mb-6 text-center">
-          UI Standardization Scanner
-        </h1>
-        {renderContent()}
-      </div>
-    </div>
+    <MainLayout>
+      {renderContent()}
+    </MainLayout>
   );
 }
