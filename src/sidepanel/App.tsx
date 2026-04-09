@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ValidationResult, ScannerMessage } from '../shared/types';
 import { MOCK_STANDARDS } from '../shared/schema';
 import { GlobalSummary } from './components/GlobalSummary';
+import { ResultCard } from './components/ResultCard';
 
 export default function App() {
   const [results, setResults] = useState<ValidationResult[] | null>(null);
@@ -129,8 +130,10 @@ export default function App() {
         <div className="w-full opacity-100 transition-opacity duration-300 flex flex-col">
           <GlobalSummary results={results} />
           
-          <div className="bg-gray-50 border border-gray-200 p-3 rounded-md mb-4 max-h-[300px] overflow-y-auto">
-            <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(results, null, 2)}</pre>
+          <div className="flex-1 w-full mb-4 overflow-y-auto max-h-[400px] pr-2 pb-1 scrollbar-thin">
+            {results.map((result, idx) => (
+              <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
+            ))}
           </div>
 
           <button
