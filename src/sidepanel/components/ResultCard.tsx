@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ValidationResult } from '../../shared/types';
 import { CheckCircle2, AlertCircle, ChevronDown, ChevronUp, AlertTriangle, XCircle, Check, ArrowRight } from 'lucide-react';
 
@@ -25,8 +25,37 @@ export function ResultCard({ result }: ResultCardProps) {
 
   const StatusIcon = isPerfect ? CheckCircle2 : AlertCircle;
 
+  const handleMouseEnter = () => {
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({
+        action: 'RELAY_HIGHLIGHT',
+        payload: { selector: result.elementSelector, isPassed: isPerfect }
+      }).catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({
+        action: 'RELAY_CLEAR'
+      }).catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage({ action: 'RELAY_CLEAR' }).catch(() => {});
+      }
+    };
+  }, []);
+
   return (
-    <div className="w-full bg-white rounded-xl border border-gray-100 shadow-sm mb-3 overflow-hidden transition-all duration-200 hover:border-[#008000] hover:shadow-md flex flex-col">
+    <div 
+      className="w-full bg-white rounded-xl border border-gray-100 shadow-sm mb-3 overflow-hidden transition-all duration-200 hover:border-[#008000] hover:bg-slate-50 hover:shadow-md flex flex-col"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Header Section (Always Visible) */}
       <div 
         className="p-4 flex flex-col gap-2 cursor-pointer"

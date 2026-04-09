@@ -9,7 +9,7 @@ export default defineManifest({
     default_path: 'sidepanel.html'
   },
   permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'tabs'],
-  host_permissions: ['http://localhost/*', 'http://127.0.0.1/*', 'https://*/*'],
+  host_permissions: ['<all_urls>'],
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module'
@@ -21,6 +21,6 @@ export default defineManifest({
     }
   ],
   action: {
-    default_title: 'Click to open side panel'
+    default_title: 'Click to open UI Validator'
   }
 })

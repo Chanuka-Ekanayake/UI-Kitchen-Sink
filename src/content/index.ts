@@ -123,18 +123,121 @@ function runAudit(standards: ComponentStandard[]): ValidationResult[] {
   return evaluationResults;
 }
 
+const HIGHLIGHT_PADDING = 8;
+
+class OverlayManager {
+  private overlay: HTMLElement | null = null;
+  private currentSelector: string | null = null;
+  private currentIsPassed: boolean | null = null;
+
+  constructor() {
+    this.handleResize = this.handleResize.bind(this);
+    window.addEventListener('resize', this.handleResize);
+  }
+
+  private initOverlay() {
+    if (this.overlay) return;
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'validator-highlight-overlay';
+    this.overlay.style.position = 'absolute';
+    this.overlay.style.pointerEvents = 'none';
+    this.overlay.style.zIndex = '2147483647';
+    this.overlay.style.transition = 'all 0.2s ease-in-out';
+    this.overlay.style.borderRadius = '4px';
+    this.overlay.style.display = 'none';
+    document.body.appendChild(this.overlay);
+  }
+
+  // Gracefully decompose arbitrary array notation like: "button.btn-primary[0]" securely back mapping to querySelectorAll
+  private resolveSelector(selector: string): HTMLElement | null {
+    const match = selector.match(/^(.*)\[(\d+)]$/);
+    if (match) {
+      const baseSelector = match[1];
+      const index = parseInt(match[2], 10);
+      try {
+        const elements = document.querySelectorAll(baseSelector);
+        return (elements[index] as HTMLElement) || null;
+      } catch (err) {
+        return null;
+      }
+    }
+    
+    try {
+      return document.querySelector(selector) as HTMLElement;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  public updateOverlayPosition(selector: string, isPassed: boolean) {
+    this.initOverlay();
+    
+    const targetElement = this.resolveSelector(selector);
+    
+    if (!targetElement) {
+      console.warn(`Scanner Overlay: Element not found or invalid -> ${selector}`);
+      this.hide();
+      return;
+    }
+
+    this.currentSelector = selector;
+    this.currentIsPassed = isPassed;
+    
+    const rect = targetElement.getBoundingClientRect();
+
+    // Conditional Styling
+    if (isPassed) {
+      this.overlay!.style.backgroundColor = 'rgba(34, 197, 94, 0.2)'; // Green
+      this.overlay!.style.border = '2px solid rgba(34, 197, 94, 0.5)';
+    } else {
+      this.overlay!.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'; // Red
+      this.overlay!.style.border = '2px solid rgba(239, 68, 68, 0.5)';
+    }
+
+    // Absolute positioning mapped dynamically adding Scroll margins + Padding 
+    this.overlay!.style.top = `${rect.top + window.scrollY - HIGHLIGHT_PADDING}px`;
+    this.overlay!.style.left = `${rect.left + window.scrollX - HIGHLIGHT_PADDING}px`;
+    this.overlay!.style.width = `${rect.width + (HIGHLIGHT_PADDING * 2)}px`;
+    this.overlay!.style.height = `${rect.height + (HIGHLIGHT_PADDING * 2)}px`;
+    this.overlay!.style.display = 'block';
+  }
+
+  public hide() {
+    if (this.overlay) {
+      this.overlay.style.display = 'none';
+    }
+    this.currentSelector = null;
+  }
+
+  private handleResize() {
+    if (this.currentSelector && this.overlay?.style.display !== 'none' && this.currentIsPassed !== null) {
+      this.updateOverlayPosition(this.currentSelector, this.currentIsPassed);
+    }
+  }
+}
+
+const overlayManager = new OverlayManager();
+
 chrome.runtime.onMessage.addListener(
-  (request: ScannerMessage, sender, sendResponse: (response: ValidationResult[]) => void) => {
-    if (request.action === 'START_SCAN') {
-      console.log('Received START_SCAN payload initiating the DOM engine...');
+  (request: ScannerMessage, sender, sendResponse) => {
+    switch (request.action) {
+      case 'START_SCAN':
+        console.log('Received START_SCAN payload initiating the DOM engine...');
+        const auditFindings = runAudit(request.standards);
+        sendResponse(auditFindings);
+        return true;
 
-      // Block execution sequence resolving DOM trees actively
-      const auditFindings = runAudit(request.standards);
+      case 'HIGHLIGHT_ELEMENT':
+        if (request.action === 'HIGHLIGHT_ELEMENT') {
+          overlayManager.updateOverlayPosition(request.payload.selector, request.payload.isPassed);
+        }
+        sendResponse({ status: 'received' });
+        break;
 
-      // Async Handshake resolution back to the Sidepanel
-      sendResponse(auditFindings);
-
-      return true; // Keeps the message channel open for the async handshake paradigm
+      case 'CLEAR_HIGHLIGHT':
+        overlayManager.hide();
+        sendResponse({ status: 'received' });
+        break;
     }
   }
 );
