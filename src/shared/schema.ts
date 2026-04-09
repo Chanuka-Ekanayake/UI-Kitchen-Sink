@@ -32,7 +32,7 @@ export const MOCK_STANDARDS: ComponentStandard[] = [
         severity: 'warning',
       },
       'padding': {
-        expectedValue: '10px 24px',
+        expectedValue: '10px 20px',
         severity: 'error',
       },
     },
@@ -47,7 +47,7 @@ export const MOCK_STANDARDS: ComponentStandard[] = [
         severity: 'error',
       },
       'color': {
-        expectedValue: '#111827',
+        expectedValue: 'oklch(0.21 0.034 264.665)',
         severity: 'warning',
       },
     },
