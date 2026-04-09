@@ -22,7 +22,8 @@ export default function App() {
       name: '',
       htmlTag: '',
       cssClass: '',
-      cssId: ''
+      cssId: '',
+      styleRules: []
     };
     setComponents([...components, newBlock]);
   };
@@ -35,7 +36,11 @@ export default function App() {
     setComponents(prev => prev.filter(block => block.id !== id));
   };
 
-  const isScanDisabled = components.length === 0 || components.some(c => !c.name.trim() || !c.htmlTag.trim());
+  const isScanDisabled = components.length === 0 || components.some(c => 
+    !c.name.trim() || 
+    !c.htmlTag.trim() || 
+    c.styleRules.some(r => !r.property.trim() || !r.value.trim())
+  );
 
   const clearResults = () => {
     setResults(null);

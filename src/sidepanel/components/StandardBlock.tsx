@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ComponentBlock } from '../../shared/types';
-import { Trash2, Search, Info } from 'lucide-react';
+import { ComponentBlock, StyleRule } from '../../shared/types';
+import { Trash2, Search, Info, Plus } from 'lucide-react';
+import { StyleRuleField } from './StyleRuleField';
 
 const COMMON_TAGS = ['div', 'button', 'input', 'h1', 'h2', 'span', 'section', 'a', 'p', 'img'];
 
@@ -65,6 +66,26 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
   const isCustomTag = tagSearch.trim() && !COMMON_TAGS.includes(tagSearch.toLowerCase());
 
   const isValid = block.name.trim() !== '' && block.htmlTag.trim() !== '';
+
+  const handleAddRule = () => {
+    const newRule: StyleRule = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      property: '',
+      value: '',
+      severity: 'error'
+    };
+    onUpdate(block.id, { styleRules: [...block.styleRules, newRule] });
+  };
+
+  const handleUpdateRule = (ruleId: string, updates: Partial<StyleRule>) => {
+    const updatedRules = block.styleRules.map(r => r.id === ruleId ? { ...r, ...updates } : r);
+    onUpdate(block.id, { styleRules: updatedRules });
+  };
+
+  const handleRemoveRule = (ruleId: string) => {
+    const updatedRules = block.styleRules.filter(r => r.id !== ruleId);
+    onUpdate(block.id, { styleRules: updatedRules });
+  };
 
   return (
     <div className={`p-4 bg-slate-50 border rounded-xl flex items-start gap-3 transition-colors duration-200 group ${isValid ? 'border-gray-200 hover:border-[#008000]/40 shadow-sm' : 'border-red-300 bg-red-50/50'}`}>
@@ -174,6 +195,39 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
             />
           </div>
 
+        </div>
+
+        {/* ROW 3: Style Rules Matrix */}
+        <div className="mt-2 pt-3 border-t border-gray-100 flex flex-col gap-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1">Style Rules</span>
+            <span className="text-[10px] font-mono text-gray-400 bg-white px-2 py-0.5 rounded-full border">{block.styleRules.length}</span>
+          </div>
+
+          <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm flex flex-col gap-3 min-h-[60px]">
+            {block.styleRules.length === 0 ? (
+              <div className="flex items-center justify-center h-full min-h-[40px] text-xs text-gray-400 italic">
+                No style rules defined.
+              </div>
+            ) : (
+              block.styleRules.map((rule) => (
+                <StyleRuleField 
+                  key={rule.id}
+                  rule={rule}
+                  onUpdate={handleUpdateRule}
+                  onRemove={handleRemoveRule}
+                />
+              ))
+            )}
+            
+            <button
+              onClick={handleAddRule}
+              className="flex items-center justify-center gap-1 w-full py-2 border border-dashed border-gray-200 hover:border-[#008000]/50 hover:bg-[#008000]/5 text-gray-500 hover:text-[#008000] font-medium rounded-md transition-all text-xs mt-1"
+            >
+              <Plus size={14} />
+              <span>Add Rule</span>
+            </button>
+          </div>
         </div>
 
       </div>

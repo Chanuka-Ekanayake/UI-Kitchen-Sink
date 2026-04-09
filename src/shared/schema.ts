@@ -24,7 +24,7 @@ export const MOCK_STANDARDS: ComponentStandard[] = [
     selector: 'button.btn-primary',
     styles: {
       'background-color': {
-        expectedValue: 'rgb(0,  , 0)',
+        expectedValue: 'rgb(0, 128, 0)',
         severity: 'error',
       },
       'border-radius': {
