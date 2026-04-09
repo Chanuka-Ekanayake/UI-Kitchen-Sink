@@ -17,6 +17,7 @@ export interface ValidationResult {
 
 export type ScannerMessage =
   | { action: 'START_SCAN'; standards: ComponentStandard[] }
-  | { action: 'HIGHLIGHT_ELEMENT'; payload: { selector: string } }
-  | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string } }
+  | { action: 'HIGHLIGHT_ELEMENT'; payload: { selector: string; isPassed: boolean } }
+  | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string; isPassed: boolean } }
+  | { action: 'RELAY_CLEAR' }
   | { action: 'CLEAR_HIGHLIGHT' };
