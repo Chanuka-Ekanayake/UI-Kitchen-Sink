@@ -8,7 +8,8 @@ export default defineManifest({
   side_panel: {
     default_path: 'sidepanel.html'
   },
-  permissions: ['sidePanel', 'storage', 'activeTab', 'scripting'],
+  permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'tabs'],
+  host_permissions: ['http://localhost/*', 'http://127.0.0.1/*', 'https://*/*'],
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module'
