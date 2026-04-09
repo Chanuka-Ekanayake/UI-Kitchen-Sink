@@ -4,6 +4,7 @@ import { MOCK_STANDARDS } from '../shared/schema';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
+import { sendTabMessage } from '../shared/messaging';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
 
@@ -63,11 +64,6 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 250));
       }
 
-      const message: ScannerMessage = {
-        action: 'START_SCAN',
-        standards: MOCK_STANDARDS
-      };
-
       // 2. Retry Logic (Max 3 attempts)
       let response: ValidationResult[] | undefined;
       let attempts = 0;
@@ -75,7 +71,7 @@ export default function App() {
 
       while (attempts < 3) {
         try {
-          response = await chrome.tabs.sendMessage(tab.id, message) as ValidationResult[];
+          response = await sendTabMessage<ValidationResult[]>('START_SCAN', { standards: MOCK_STANDARDS });
           break; // Success! Break out of the loop
         } catch (err) {
           attempts++;
