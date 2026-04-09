@@ -9,7 +9,7 @@ chrome.runtime.onInstalled.addListener(() => {
   }
 });
 chrome.runtime.onMessage.addListener((request: ScannerMessage, sender, sendResponse) => {
-  if (request.action === 'RELAY_HIGHLIGHT' || request.action === 'CLEAR_HIGHLIGHT') {
+  if (request.action === 'RELAY_HIGHLIGHT' || request.action === 'RELAY_CLEAR' || request.action === 'CLEAR_HIGHLIGHT') {
     // Escaping sidepanel bounds dynamically tracking the active DOM viewport independently 
     chrome.tabs.query({ active: true, currentWindow: true })
       .then((tabs) => {

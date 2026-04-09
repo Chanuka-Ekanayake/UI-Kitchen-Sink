@@ -123,9 +123,12 @@ function runAudit(standards: ComponentStandard[]): ValidationResult[] {
   return evaluationResults;
 }
 
+const HIGHLIGHT_PADDING = 8;
+
 class OverlayManager {
   private overlay: HTMLElement | null = null;
   private currentSelector: string | null = null;
+  private currentIsPassed: boolean | null = null;
 
   constructor() {
     this.handleResize = this.handleResize.bind(this);
@@ -140,8 +143,6 @@ class OverlayManager {
     this.overlay.style.pointerEvents = 'none';
     this.overlay.style.zIndex = '2147483647';
     this.overlay.style.transition = 'all 0.2s ease-in-out';
-    this.overlay.style.backgroundColor = 'rgba(0, 128, 0, 0.15)'; // Brand-specific green
-    this.overlay.style.border = '2px solid #008000';
     this.overlay.style.borderRadius = '4px';
     this.overlay.style.display = 'none';
     document.body.appendChild(this.overlay);
@@ -168,7 +169,7 @@ class OverlayManager {
     }
   }
 
-  public updateOverlayPosition(selector: string) {
+  public updateOverlayPosition(selector: string, isPassed: boolean) {
     this.initOverlay();
     
     const targetElement = this.resolveSelector(selector);
@@ -180,14 +181,24 @@ class OverlayManager {
     }
 
     this.currentSelector = selector;
+    this.currentIsPassed = isPassed;
     
     const rect = targetElement.getBoundingClientRect();
 
-    // Absolute positioning mapped dynamically adding Scroll margins preventing drifting
-    this.overlay!.style.top = `${rect.top + window.scrollY}px`;
-    this.overlay!.style.left = `${rect.left + window.scrollX}px`;
-    this.overlay!.style.width = `${rect.width}px`;
-    this.overlay!.style.height = `${rect.height}px`;
+    // Conditional Styling
+    if (isPassed) {
+      this.overlay!.style.backgroundColor = 'rgba(34, 197, 94, 0.2)'; // Green
+      this.overlay!.style.border = '2px solid rgba(34, 197, 94, 0.5)';
+    } else {
+      this.overlay!.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'; // Red
+      this.overlay!.style.border = '2px solid rgba(239, 68, 68, 0.5)';
+    }
+
+    // Absolute positioning mapped dynamically adding Scroll margins + Padding 
+    this.overlay!.style.top = `${rect.top + window.scrollY - HIGHLIGHT_PADDING}px`;
+    this.overlay!.style.left = `${rect.left + window.scrollX - HIGHLIGHT_PADDING}px`;
+    this.overlay!.style.width = `${rect.width + (HIGHLIGHT_PADDING * 2)}px`;
+    this.overlay!.style.height = `${rect.height + (HIGHLIGHT_PADDING * 2)}px`;
     this.overlay!.style.display = 'block';
   }
 
@@ -199,8 +210,8 @@ class OverlayManager {
   }
 
   private handleResize() {
-    if (this.currentSelector && this.overlay?.style.display !== 'none') {
-      this.updateOverlayPosition(this.currentSelector);
+    if (this.currentSelector && this.overlay?.style.display !== 'none' && this.currentIsPassed !== null) {
+      this.updateOverlayPosition(this.currentSelector, this.currentIsPassed);
     }
   }
 }
@@ -217,7 +228,9 @@ chrome.runtime.onMessage.addListener(
         return true;
 
       case 'HIGHLIGHT_ELEMENT':
-        overlayManager.updateOverlayPosition(request.payload.selector);
+        if (request.action === 'HIGHLIGHT_ELEMENT') {
+          overlayManager.updateOverlayPosition(request.payload.selector, request.payload.isPassed);
+        }
         sendResponse({ status: 'received' });
         break;
 
