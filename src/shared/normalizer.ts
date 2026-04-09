@@ -55,7 +55,7 @@ export function normalizeDimension(value: string): string {
 
 /**
  * Compares actual and expected CSS values with branching logic for different property families.
- * Automatically accommodates a 0.5px rendering tolerance fuzziness for computed dimensions.
+ * Automatically accommodates a 1.0px rendering tolerance fuzziness for computed dimensions.
  * 
  * @param actual - The actual style value computed by the browser
  * @param expected - The strict expected standard
@@ -70,7 +70,16 @@ export function isStyleMatch(actual: string, expected: string, property: string)
 
   // 1. Color Branch
   if (prop.includes('color')) {
-    return normalizeColor(actual) === normalizeColor(expected);
+    const c1 = colord(normalizeColor(actual)).toRgb();
+    const c2 = colord(normalizeColor(expected)).toRgb();
+    
+    // Treat as match if R, G, and B are identical and Alpha is within a 0.02 tolerance
+    if (c1.r === c2.r && c1.g === c2.g && c1.b === c2.b) {
+      if (Math.abs(c1.a - c2.a) <= 0.02) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // 2. Dimensions Branch
@@ -95,6 +104,8 @@ export function isStyleMatch(actual: string, expected: string, property: string)
       return false; // Structurally incompatible (e.g. 1-value vs 4-value padding shortcut)
     }
 
+    const TOLERANCE_DELTA = 1;
+
     for (let i = 0; i < normActual.length; i++) {
         const actStr = normActual[i];
         const expStr = normExpected[i];
@@ -107,8 +118,8 @@ export function isStyleMatch(actual: string, expected: string, property: string)
             const actVal = parseFloat(actPxMatch[1]);
             const expVal = parseFloat(expPxMatch[1]);
             
-            // Subpixel tolerance calculation: $0.5px margin
-            if (Math.abs(actVal - expVal) > 0.501) {
+            // Subpixel tolerance calculation
+            if (Math.abs(actVal - expVal) > TOLERANCE_DELTA) {
                 return false;
             }
         } else if (actStr !== expStr) {

@@ -31,6 +31,25 @@ export const MOCK_STANDARDS: ComponentStandard[] = [
         expectedValue: '5px',
         severity: 'warning',
       },
+      'padding': {
+        expectedValue: '10px 24px',
+        severity: 'error',
+      },
+    },
+  },
+  {
+    id: 'main-heading-standard',
+    name: 'Main Heading',
+    selector: 'h1',
+    styles: {
+      'font-size': {
+        expectedValue: '32px',
+        severity: 'error',
+      },
+      'color': {
+        expectedValue: '#111827',
+        severity: 'warning',
+      },
     },
   },
 ];
