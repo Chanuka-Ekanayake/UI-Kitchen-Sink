@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ValidationResult, ScannerMessage } from '../shared/types';
 import { MOCK_STANDARDS } from '../shared/schema';
+import { GlobalSummary } from './components/GlobalSummary';
 
 export default function App() {
   const [results, setResults] = useState<ValidationResult[] | null>(null);
@@ -126,11 +127,8 @@ export default function App() {
     if (results !== null) {
       return (
         <div className="w-full opacity-100 transition-opacity duration-300 flex flex-col">
-          <div className="mb-4 text-center">
-            <h2 className="text-lg font-semibold text-gray-800">Scan Complete</h2>
-            <p className="text-xs text-gray-500">Evaluated {results.length} components matching standards.</p>
-          </div>
-
+          <GlobalSummary results={results} />
+          
           <div className="bg-gray-50 border border-gray-200 p-3 rounded-md mb-4 max-h-[300px] overflow-y-auto">
             <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(results, null, 2)}</pre>
           </div>
