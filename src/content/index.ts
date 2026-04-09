@@ -1,5 +1,4 @@
-import { ValidationResult, PropertyResult, ScannerMessage } from '../shared/types';
-import { ComponentStandard } from '../shared/schema';
+import { ValidationResult, PropertyResult, ScannerMessage, ComponentStandard } from '../shared/types';
 import { isStyleMatch } from '../shared/normalizer';
 
 (window as any).__UI_VALIDATOR_LOADED__ = true;
