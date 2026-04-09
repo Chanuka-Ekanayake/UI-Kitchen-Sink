@@ -1,4 +1,30 @@
-import { ComponentStandard } from './schema';
+export interface UIPropertyRule {
+  expectedValue: string;
+  severity: 'error' | 'warning';
+}
+
+export interface ComponentStandard {
+  id: string;
+  name: string;
+  selector: string;
+  styles: Record<string, UIPropertyRule>;
+}
+
+export interface StyleRule {
+  id: string;
+  property: string;
+  value: string;
+  severity: 'error' | 'warning';
+}
+
+export interface ComponentBlock {
+  id: string;
+  name: string;
+  htmlTag: string;
+  cssClass: string;
+  cssId: string;
+  styleRules: StyleRule[];
+}
 
 export interface PropertyResult {
   property: string;

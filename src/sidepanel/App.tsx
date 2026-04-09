@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ValidationResult, ScannerMessage } from '../shared/types';
-import { MOCK_STANDARDS } from '../shared/schema';
+import { ValidationResult, ScannerMessage, ComponentBlock, ComponentStandard } from '../shared/types';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
+import { StandardBlock } from './components/StandardBlock';
+import { Plus } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
@@ -12,6 +13,46 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('HOME');
   const [results, setResults] = useState<ValidationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Default to empty; useEffect hydrator pulls overrides securely natively
+  const [components, setComponents] = useState<ComponentBlock[]>([]);
+
+  useEffect(() => {
+    chrome.storage.local.get('ui_components_data', (result) => {
+      if (result.ui_components_data && Array.isArray(result.ui_components_data)) {
+        setComponents(result.ui_components_data);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    chrome.storage.local.set({ ui_components_data: components });
+  }, [components]);
+
+  const addComponent = () => {
+    const newBlock: ComponentBlock = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      name: '',
+      htmlTag: '',
+      cssClass: '',
+      cssId: '',
+      styleRules: []
+    };
+    setComponents([...components, newBlock]);
+  };
+
+  const handleUpdateComponent = (id: string, updates: Partial<ComponentBlock>) => {
+    setComponents(prev => prev.map(block => block.id === id ? { ...block, ...updates } : block));
+  };
+
+  const handleRemoveComponent = (id: string) => {
+    setComponents(prev => prev.filter(block => block.id !== id));
+  };
+
+  const isScanDisabled = components.length === 0 || components.some(c => 
+    !c.name.trim() || 
+    !c.htmlTag.trim() || 
+    c.styleRules.some(r => !r.property.trim() || !r.value.trim())
+  );
 
   const clearResults = () => {
     setResults(null);
@@ -57,11 +98,47 @@ export default function App() {
           files: [injectionPath]
         }).catch(err => {
           console.warn('Manual injection error:', err);
-          console.warn(`CRITICAL: Failed trying to load path: ${injectionPath}. Check dist/manifest.json to verify the exact build artifact name.`);
         });
 
         // Give the script a moment to evaluate
         await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      const mapStateToScannerFormat = (blocks: ComponentBlock[]): ComponentStandard[] => {
+        return blocks.map(block => {
+          let selectorStr = block.htmlTag;
+          if (block.cssClass) selectorStr += `.${block.cssClass}`;
+          if (block.cssId) selectorStr += `#${block.cssId}`;
+    
+          const mappedStyles: Record<string, { expectedValue: string; severity: 'error' | 'warning' }> = {};
+          block.styleRules.forEach(rule => {
+            if (rule.property.trim() && rule.value.trim()) {
+              mappedStyles[rule.property] = {
+                expectedValue: rule.value.trim(),
+                severity: rule.severity
+              };
+            }
+          });
+    
+          return {
+            id: block.id,
+            name: block.name,
+            selector: selectorStr,
+            styles: mappedStyles
+          };
+        });
+      };
+
+      const dynamicStandards = mapStateToScannerFormat(components);
+
+      // Pre-Scan Syntax Verification bounding limits targeting standard error tracking UI
+      for (const std of dynamicStandards) {
+        try {
+          // Native validation mimicking DOM checks blocking malformed queries escaping
+          document.createDocumentFragment().querySelector(std.selector);
+        } catch (e) {
+          throw new Error(`Invalid Selector Computed: "${std.selector}" for component "${std.name}". Please map legitimate bounds.`);
+        }
       }
 
       // 2. Retry Logic (Max 3 attempts)
@@ -71,7 +148,7 @@ export default function App() {
 
       while (attempts < 3) {
         try {
-          response = await sendTabMessage<ValidationResult[]>('START_SCAN', { standards: MOCK_STANDARDS });
+          response = await sendTabMessage<ValidationResult[]>('START_SCAN', { standards: dynamicStandards });
           break; // Success! Break out of the loop
         } catch (err) {
           attempts++;
@@ -149,13 +226,43 @@ export default function App() {
       case 'HOME':
       default:
         return (
-          <div className="w-full">
-            <button
-              onClick={handleScan}
-              className="bg-[#008000] hover:bg-[#006000] text-white font-medium py-2.5 px-6 rounded-md transition-all shadow-sm active:scale-95 w-full mt-4"
-            >
-              Scan Page
-            </button>
+          <div className="w-full h-full flex flex-col min-h-0">
+            <div className="flex-1 w-full overflow-y-auto pr-2 pb-2 flex flex-col gap-4 scrollbar-thin">
+              {components.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 text-center px-6">
+                  <p className="text-sm font-medium text-gray-500">No components defined.</p>
+                  <p className="text-xs text-gray-400 mt-1">Add your first component to begin the audit.</p>
+                </div>
+              ) : (
+                components.map((block) => (
+                  <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <StandardBlock 
+                      block={block} 
+                      onUpdate={handleUpdateComponent} 
+                      onRemove={handleRemoveComponent} 
+                    />
+                  </div>
+                ))
+              )}
+              
+              <button
+                onClick={addComponent}
+                className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-gray-200 hover:border-[#008000]/50 hover:bg-[#008000]/5 text-gray-500 hover:text-[#008000] font-medium rounded-xl transition-all"
+              >
+                <Plus size={16} />
+                <span>Add Component Node</span>
+              </button>
+            </div>
+
+            <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100">
+              <button
+                onClick={handleScan}
+                disabled={isScanDisabled}
+                className="bg-[#008000] hover:bg-[#006000] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-md transition-all shadow-sm active:scale-95 w-full text-sm"
+              >
+                Start Scan
+              </button>
+            </div>
           </div>
         );
     }
