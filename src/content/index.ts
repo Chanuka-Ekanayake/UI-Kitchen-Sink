@@ -340,8 +340,10 @@ const HIGHLIGHT_PADDING = 8;
 
 class OverlayManager {
   private overlay: HTMLElement | null = null;
+  private badge: HTMLElement | null = null;
   private currentSelector: string | null = null;
   private currentIsPassed: boolean | null = null;
+  private currentState: string = 'default';
 
   constructor() {
     this.handleResize = this.handleResize.bind(this);
@@ -359,9 +361,24 @@ class OverlayManager {
     this.overlay.style.borderRadius = '4px';
     this.overlay.style.display = 'none';
     document.body.appendChild(this.overlay);
+
+    // State badge element
+    this.badge = document.createElement('div');
+    this.badge.style.position = 'absolute';
+    this.badge.style.top = '-10px';
+    this.badge.style.right = '-10px';
+    this.badge.style.fontSize = '9px';
+    this.badge.style.fontWeight = '700';
+    this.badge.style.fontFamily = 'monospace';
+    this.badge.style.padding = '2px 6px';
+    this.badge.style.borderRadius = '4px';
+    this.badge.style.letterSpacing = '0.5px';
+    this.badge.style.textTransform = 'uppercase';
+    this.badge.style.display = 'none';
+    this.badge.style.whiteSpace = 'nowrap';
+    this.overlay.appendChild(this.badge);
   }
 
-  // Gracefully decompose arbitrary array notation like: "button.btn-primary[0]" securely back mapping to querySelectorAll
   private resolveSelector(selector: string): HTMLElement | null {
     const match = selector.match(/^(.*)\[(\d+)]$/);
     if (match) {
@@ -370,61 +387,75 @@ class OverlayManager {
       try {
         const elements = document.querySelectorAll(baseSelector);
         return (elements[index] as HTMLElement) || null;
-      } catch (err) {
+      } catch {
         return null;
       }
     }
-    
     try {
       return document.querySelector(selector) as HTMLElement;
-    } catch (err) {
+    } catch {
       return null;
     }
   }
 
-  public updateOverlayPosition(selector: string, isPassed: boolean) {
+  public updateOverlayPosition(selector: string, isPassed: boolean, state: string = 'default') {
     this.initOverlay();
-    
+
     const targetElement = this.resolveSelector(selector);
-    
     if (!targetElement) {
-      console.warn(`Scanner Overlay: Element not found or invalid -> ${selector}`);
+      console.warn(`Scanner Overlay: Element not found -> ${selector}`);
       this.hide();
       return;
     }
 
     this.currentSelector = selector;
     this.currentIsPassed = isPassed;
-    
-    const rect = targetElement.getBoundingClientRect();
+    this.currentState = state;
 
-    // Conditional Styling
+    const rect = targetElement.getBoundingClientRect();
+    const isInteractive = state !== 'default';
+
+    // Conditional color + border style
     if (isPassed) {
-      this.overlay!.style.backgroundColor = 'rgba(34, 197, 94, 0.2)'; // Green
-      this.overlay!.style.border = '2px solid rgba(34, 197, 94, 0.5)';
+      this.overlay!.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+      this.overlay!.style.border = `2px ${isInteractive ? 'dashed' : 'solid'} rgba(34, 197, 94, 0.5)`;
     } else {
-      this.overlay!.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'; // Red
-      this.overlay!.style.border = '2px solid rgba(239, 68, 68, 0.5)';
+      this.overlay!.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+      this.overlay!.style.border = `2px ${isInteractive ? 'dashed' : 'solid'} rgba(239, 68, 68, 0.5)`;
     }
 
-    // Absolute positioning mapped dynamically adding Scroll margins + Padding 
+    // Position
     this.overlay!.style.top = `${rect.top + window.scrollY - HIGHLIGHT_PADDING}px`;
     this.overlay!.style.left = `${rect.left + window.scrollX - HIGHLIGHT_PADDING}px`;
     this.overlay!.style.width = `${rect.width + (HIGHLIGHT_PADDING * 2)}px`;
     this.overlay!.style.height = `${rect.height + (HIGHLIGHT_PADDING * 2)}px`;
     this.overlay!.style.display = 'block';
+
+    // State badge
+    if (isInteractive && this.badge) {
+      this.badge.textContent = `:${state}`;
+      this.badge.style.backgroundColor = isPassed ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)';
+      this.badge.style.color = '#fff';
+      this.badge.style.display = 'block';
+    } else if (this.badge) {
+      this.badge.style.display = 'none';
+    }
   }
 
   public hide() {
     if (this.overlay) {
       this.overlay.style.display = 'none';
     }
+    if (this.badge) {
+      this.badge.style.display = 'none';
+    }
     this.currentSelector = null;
+    this.currentState = 'default';
   }
 
   private handleResize() {
     if (this.currentSelector && this.overlay?.style.display !== 'none' && this.currentIsPassed !== null) {
-      this.updateOverlayPosition(this.currentSelector, this.currentIsPassed);
+      this.updateOverlayPosition(this.currentSelector, this.currentIsPassed, this.currentState);
     }
   }
 }
@@ -441,9 +472,11 @@ chrome.runtime.onMessage.addListener(
         return true;
 
       case 'HIGHLIGHT_ELEMENT':
-        if (request.action === 'HIGHLIGHT_ELEMENT') {
-          overlayManager.updateOverlayPosition(request.payload.selector, request.payload.isPassed);
-        }
+        overlayManager.updateOverlayPosition(
+          request.payload.selector,
+          request.payload.isPassed,
+          request.payload.state || 'default'
+        );
         sendResponse({ status: 'received' });
         break;
 
