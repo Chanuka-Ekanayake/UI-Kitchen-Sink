@@ -72,7 +72,8 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
       id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
       property: '',
       value: '',
-      severity: 'error'
+      severity: 'error',
+      state: 'default'
     };
     onUpdate(block.id, { styleRules: [...block.styleRules, newRule] });
   };

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleRule } from '../../shared/types';
-import { X, Search, AlertCircle, AlertTriangle } from 'lucide-react';
+import { X, Search, AlertCircle, AlertTriangle, MousePointerClick } from 'lucide-react';
 
 const COMMON_PROPERTIES = [
   'background-color', 'border-radius', 'color', 'font-family', 
@@ -90,6 +90,27 @@ export function StyleRuleField({ rule, onUpdate, onRemove }: StyleRuleFieldProps
             )}
           </div>
         )}
+      </div>
+
+      {/* State Selector Node */}
+      <div className="relative shrink-0 group/state" title="Default checks base styles, others check interactive states.">
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+          <MousePointerClick size={12} />
+        </div>
+        <select
+          value={rule.state || 'default'}
+          onChange={(e) => onUpdate(rule.id, { state: e.target.value as StyleRule['state'] })}
+          className="appearance-none bg-slate-100 text-xs font-mono text-gray-700 border border-gray-200 rounded-md pl-6 pr-4 py-1.5 outline-none focus:border-[#008000] focus:ring-1 focus:ring-[#008000] cursor-pointer"
+        >
+          <option value="default">Default</option>
+          <option value="hover">:hover</option>
+          <option value="active">:active</option>
+          <option value="focus">:focus</option>
+          <option value="visited">:visited</option>
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-gray-400">
+          <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+        </div>
       </div>
 
       {/* Expected Evaluation Node */}

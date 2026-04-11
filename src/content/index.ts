@@ -77,34 +77,29 @@ function runAudit(standards: ComponentStandard[]): ValidationResult[] {
 
     if (elements.length === 0) continue;
 
-    // Batching loop mapping: Read-only phase evaluating live computed constraints
-    elements.forEach((element, index) => {
-      const computedStyles = window.getComputedStyle(element);
+    elements.forEach(element => {
       const propertyResults: PropertyResult[] = [];
 
-      const propertiesToTest = Object.keys(standard.styles);
-
-      for (const property of propertiesToTest) {
-        const rule = standard.styles[property];
+      for (const rule of standard.styles) {
         if (!rule || rule.expectedValue == null) continue;
 
-        const actualValue = getResolvedStyle(computedStyles, property);
+        const computedStyles = window.getComputedStyle(element);
+        const actualValue = getResolvedStyle(computedStyles, rule.property);
 
-        const passed = isStyleMatch(actualValue, rule.expectedValue, property);
+        const passed = isStyleMatch(actualValue, rule.expectedValue, rule.property);
 
         propertyResults.push({
-          property,
+          property: rule.property,
           expected: rule.expectedValue,
           actual: actualValue,
           passed,
           severity: rule.severity,
+          state: rule.state || 'default',
         });
       }
 
-      // Compute Weighted Severity calculation ratio
       const calculatedScore = calculateComponentScore(propertyResults);
-
-      // Generate a unique identifier for the elementSelector instance
+      const index = Array.from(document.querySelectorAll(standard.selector)).indexOf(element);
       const uniqueSelector = `${standard.selector}[${index}]`;
 
       evaluationResults.push({
