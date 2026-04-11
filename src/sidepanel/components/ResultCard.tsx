@@ -134,6 +134,11 @@ export function ResultCard({ result }: ResultCardProps) {
                         )}
                         <span className="truncate flex-1 font-mono text-[10px] tracking-tight">{propResult.actual}</span>
                       </div>
+                    ) : propResult.actual === 'CORS Blocked' ? (
+                      <div className="flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1.5 rounded-md w-full overflow-hidden">
+                        <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+                        <span className="truncate flex-1 font-mono text-[10px] tracking-tight">Cannot verify — external CDN stylesheet blocked by CORS</span>
+                      </div>
                     ) : (
                       <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-md p-1.5 gap-2 overflow-hidden">
                         {/* Expected Node */}
