@@ -1,13 +1,15 @@
 export interface UIPropertyRule {
+  property: string;
   expectedValue: string;
   severity: 'error' | 'warning';
+  state: 'default' | 'hover' | 'active' | 'focus' | 'visited';
 }
 
 export interface ComponentStandard {
   id: string;
   name: string;
   selector: string;
-  styles: Record<string, UIPropertyRule>;
+  styles: UIPropertyRule[];
 }
 
 export interface StyleRule {
@@ -15,6 +17,7 @@ export interface StyleRule {
   property: string;
   value: string;
   severity: 'error' | 'warning';
+  state: 'default' | 'hover' | 'active' | 'focus' | 'visited';
 }
 
 export interface ComponentBlock {
@@ -32,6 +35,7 @@ export interface PropertyResult {
   actual: string;
   passed: boolean;
   severity: 'error' | 'warning';
+  state: 'default' | 'hover' | 'active' | 'focus' | 'visited';
 }
 
 export interface ValidationResult {
@@ -42,8 +46,8 @@ export interface ValidationResult {
 }
 
 export type ScannerMessage =
-  | { action: 'START_SCAN'; standards: ComponentStandard[] }
-  | { action: 'HIGHLIGHT_ELEMENT'; payload: { selector: string; isPassed: boolean } }
-  | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string; isPassed: boolean } }
+  | { action: 'START_SCAN'; standards: ComponentStandard[]; debug?: boolean }
+  | { action: 'HIGHLIGHT_ELEMENT'; payload: { selector: string; isPassed: boolean; state?: string } }
+  | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string; isPassed: boolean; state?: string } }
   | { action: 'RELAY_CLEAR' }
   | { action: 'CLEAR_HIGHLIGHT' };

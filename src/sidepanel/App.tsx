@@ -110,15 +110,14 @@ export default function App() {
           if (block.cssClass) selectorStr += `.${block.cssClass}`;
           if (block.cssId) selectorStr += `#${block.cssId}`;
     
-          const mappedStyles: Record<string, { expectedValue: string; severity: 'error' | 'warning' }> = {};
-          block.styleRules.forEach(rule => {
-            if (rule.property.trim() && rule.value.trim()) {
-              mappedStyles[rule.property] = {
-                expectedValue: rule.value.trim(),
-                severity: rule.severity
-              };
-            }
-          });
+          const mappedStyles = block.styleRules
+            .filter(rule => rule.property.trim() && rule.value.trim())
+            .map(rule => ({
+              property: rule.property.trim(),
+              expectedValue: rule.value.trim(),
+              severity: rule.severity,
+              state: rule.state || 'default'
+            }));
     
           return {
             id: block.id,

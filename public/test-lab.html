@@ -15,6 +15,107 @@
             margin: 0;
         }
     </style>
+
+    <!-- ============================================================
+         PSEUDO-STATE CSSOM TEST RULES
+         All rules are SAME-ORIGIN so the CSSOM scanner can read
+         cssRules without triggering a SecurityError.
+         These values are deliberately unique & easy to verify.
+    ============================================================ -->
+    <style id="cssom-test-rules">
+
+        /* ── PRIMARY BUTTON ─────────────────────────────────────── */
+        .test-btn {
+            background-color: rgb(0, 128, 0);
+            color: rgb(255, 255, 255);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s, transform 0.1s;
+        }
+        .test-btn:hover {
+            background-color: rgb(220, 38, 38);
+            transform: scale(1.05);
+        }
+        .test-btn:active {
+            background-color: rgb(153, 27, 27);
+            transform: scale(0.97);
+        }
+
+        /* ── TEXT INPUT ──────────────────────────────────────────── */
+        .test-input {
+            border: 1px solid rgb(209, 213, 219);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 15px;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .test-input:focus {
+            border-color: rgb(59, 130, 246);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+        }
+
+        /* ── NAVIGATION LINK ─────────────────────────────────────── */
+        .test-link {
+            color: rgb(17, 24, 39);
+            font-size: 15px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.15s;
+        }
+        .test-link:hover {
+            color: rgb(37, 99, 235);
+            text-decoration: underline;
+        }
+        .test-link:visited {
+            color: rgb(107, 33, 168);
+        }
+
+        /* ── NESTED COMPONENT ────────────────────────────────────── */
+        .test-parent {
+            background-color: rgb(243, 244, 246);
+            border-radius: 8px;
+            padding: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: default;
+        }
+        .test-parent .test-child {
+            color: rgb(107, 114, 128);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.15s;
+        }
+        .test-parent:hover .test-child {
+            color: rgb(16, 185, 129);
+        }
+
+        /* ── COMPLEX SELECTOR ────────────────────────────────────── */
+        section#section-gallery .gallery-item.active:hover {
+            background-color: rgb(254, 243, 199);
+            border-color: rgb(251, 191, 36);
+        }
+
+        /* ── LABEL CHIP HELPER ───────────────────────────────────── */
+        .cssom-chip {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+        .cssom-chip.pass  { background: rgb(240, 253, 244); color: rgb(22, 101, 52);  border: 1px solid rgb(187, 247, 208); }
+        .cssom-chip.info  { background: rgb(239, 246, 255); color: rgb(29, 78, 216);  border: 1px solid rgb(191, 219, 254); }
+        .cssom-chip.fail  { background: rgb(254, 242, 242); color: rgb(185, 28, 28);  border: 1px solid rgb(254, 202, 202); }
+    </style>
 </head>
 
 <body class="bg-white text-gray-900 h-screen flex overflow-hidden">
@@ -34,6 +135,10 @@
                     class="block px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Forms</a>
                 <a href="#section-containers"
                     class="block px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Containers</a>
+                <a href="#section-gallery"
+                    class="block px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Validation Gallery</a>
+                <a href="#section-baseline"
+                    class="block px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Standard Baseline</a>
             </nav>
         </div>
     </aside>
@@ -442,7 +547,239 @@
                 </div>
             </div>
         </section>
+        <!-- ══════════════════════════════════════════════════════════
+             VALIDATION GALLERY — CSSOM PSEUDO-STATE TEST SUITE
+        ══════════════════════════════════════════════════════════ -->
+        <section id="section-gallery" class="mb-16">
+            <header class="mb-6 flex items-start justify-between">
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">Validation Gallery</h2>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Each element below has <strong>explicit CSS rules</strong> inside a local
+                        <code>&lt;style&gt;</code> block so the CSSOM scanner can read them without CORS errors.
+                        Hover / focus / click each element to observe the interactive style, then
+                        run the Extension to verify via CSSOM.
+                    </p>
+                </div>
+                <!-- RESET BUTTON -->
+                <button
+                    id="btn-reset-gallery"
+                    onclick="resetGallery()"
+                    style="flex-shrink:0; margin-left:16px; background:rgb(243,244,246); border:1px solid rgb(209,213,219); border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; color:rgb(55,65,81);"
+                >↺ Reset</button>
+            </header>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+
+                <!-- ── 1. PRIMARY BUTTON ──────────────────────────── -->
+                <div class="border border-slate-200 rounded-xl p-6 bg-white shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-800 mb-1">1 · Primary Button</h3>
+                    <p class="text-xs text-gray-500 mb-4">Selector: <code>.test-btn</code></p>
+
+                    <button id="gallery-btn" class="test-btn">Hover &amp; Click Me</button>
+
+                    <div class="mt-4 space-y-1">
+                        <div>
+                            <span class="cssom-chip pass">default → background-color: rgb(0, 128, 0)</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">:hover → background-color: rgb(220, 38, 38) · transform: scale(1.05)</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">:active → background-color: rgb(153, 27, 27) · transform: scale(0.97)</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                        <strong>Extension config:</strong><br>
+                        Selector: <code>.test-btn</code> · Rule 1: <em>background-color</em> state ":hover" → <code>rgb(220, 38, 38)</code><br>
+                        Rule 2: <em>background-color</em> state ":active" → <code>rgb(153, 27, 27)</code>
+                    </div>
+                </div>
+
+                <!-- ── 2. TEXT INPUT ──────────────────────────────── -->
+                <div class="border border-slate-200 rounded-xl p-6 bg-white shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-800 mb-1">2 · Text Input</h3>
+                    <p class="text-xs text-gray-500 mb-4">Selector: <code>.test-input</code></p>
+
+                    <input id="gallery-input" type="text" class="test-input" placeholder="Click to focus…">
+
+                    <div class="mt-4 space-y-1">
+                        <div>
+                            <span class="cssom-chip pass">default → border: 1px solid rgb(209, 213, 219)</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">:focus → border-color: rgb(59, 130, 246) · box-shadow: 0 0 0 3px rgba(59,130,246,.35)</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                        <strong>Extension config:</strong><br>
+                        Selector: <code>.test-input</code> · Rule: <em>border-color</em> state ":focus" → <code>rgb(59, 130, 246)</code>
+                    </div>
+                </div>
+
+                <!-- ── 3. NAVIGATION LINK ─────────────────────────── -->
+                <div class="border border-slate-200 rounded-xl p-6 bg-white shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-800 mb-1">3 · Navigation Link</h3>
+                    <p class="text-xs text-gray-500 mb-4">Selector: <code>.test-link</code></p>
+
+                    <a id="gallery-link" class="test-link" href="#section-gallery">Visit this link (hover &amp; see visited)</a>
+
+                    <div class="mt-4 space-y-1">
+                        <div>
+                            <span class="cssom-chip pass">default → color: rgb(17, 24, 39)</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">:hover → color: rgb(37, 99, 235) · text-decoration: underline</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">:visited → color: rgb(107, 33, 168)</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                        <strong>Extension config:</strong><br>
+                        Selector: <code>.test-link</code> · Rule 1: <em>color</em> state ":hover" → <code>rgb(37, 99, 235)</code><br>
+                        Rule 2: <em>color</em> state ":visited" → <code>rgb(107, 33, 168)</code>
+                    </div>
+                </div>
+
+                <!-- ── 4. NESTED COMPONENT ────────────────────────── -->
+                <div class="border border-slate-200 rounded-xl p-6 bg-white shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-800 mb-1">4 · Nested Component</h3>
+                    <p class="text-xs text-gray-500 mb-4">Selector: <code>.test-parent:hover .test-child</code></p>
+
+                    <div id="gallery-parent" class="test-parent">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        <span class="test-child">Child text changes color on parent hover</span>
+                    </div>
+
+                    <div class="mt-4 space-y-1">
+                        <div>
+                            <span class="cssom-chip pass">.test-child default → color: rgb(107, 114, 128)</span>
+                        </div>
+                        <div>
+                            <span class="cssom-chip info">.test-parent:hover .test-child → color: rgb(16, 185, 129)</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                        <strong>Note:</strong> Compound selectors like <code>.test-parent:hover .test-child</code>
+                        test the engine's CSSOM key-matching precision.
+                    </div>
+                </div>
+
+                <!-- ── 5. COMPLEX SELECTOR ────────────────────────── -->
+                <div class="border border-slate-200 rounded-xl p-6 bg-white shadow-sm xl:col-span-2">
+                    <h3 class="text-base font-semibold text-gray-800 mb-1">5 · Complex Selector Gallery Item</h3>
+                    <p class="text-xs text-gray-500 mb-4">
+                        Selector: <code>section#section-gallery .gallery-item.active:hover</code> — tests precise multi-class + ID + pseudo matching.
+                    </p>
+
+                    <div class="flex gap-4 flex-wrap">
+                        <div
+                            class="gallery-item active"
+                            style="border: 2px solid rgb(229,231,235); border-radius:8px; padding:16px 24px; background:rgb(255,255,255); font-weight:600; font-size:14px; cursor:pointer; transition: background-color .15s, border-color .15s;"
+                        >
+                            Active Item — hover me
+                            <div><span class="cssom-chip info">:hover → background-color: rgb(254,243,199) · border-color: rgb(251,191,36)</span></div>
+                        </div>
+                        <div
+                            class="gallery-item"
+                            style="border: 2px solid rgb(229,231,235); border-radius:8px; padding:16px 24px; background:rgb(249,250,251); font-weight:600; font-size:14px; cursor:pointer; color:rgb(156,163,175);"
+                        >
+                            Inactive Item (no .active class)
+                            <div><span class="cssom-chip fail">:hover → no rule matched — 'Not Defined'</span></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
+                        <strong>Extension config:</strong> Selector: <code>section#section-gallery .gallery-item.active</code>
+                        · Rule: <em>background-color</em> state ":hover" → <code>rgb(254, 243, 199)</code>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             STANDARD BASELINE — NO PSEUDO-STYLES DEFINED
+             Use these to verify the engine reports 'Not Defined'
+             when no matching CSSOM rule exists.
+        ══════════════════════════════════════════════════════════ -->
+        <section id="section-baseline" class="mb-16">
+            <header class="mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">Standard Baseline</h2>
+                <p class="text-sm text-gray-500 mt-1">
+                    These elements have <strong>no interactive pseudo-state CSS rules</strong>.
+                    Auditing them for <code>:hover</code> or <code>:focus</code> should return
+                    <code>actual: "Not Defined", passed: false</code> in the Extension results.
+                </p>
+            </header>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+                <!-- Baseline Button -->
+                <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Baseline Button</h3>
+                    <button
+                        id="baseline-btn"
+                        class="baseline-btn"
+                        style="background-color:rgb(99,102,241); color:rgb(255,255,255); border:none; border-radius:6px; padding:10px 20px; font-size:14px; font-weight:600; cursor:pointer;"
+                    >No Hover Rule</button>
+                    <div class="mt-3">
+                        <span class="cssom-chip fail">Audit :hover background-color → expects 'Not Defined'</span>
+                    </div>
+                </div>
+
+                <!-- Baseline Input -->
+                <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Baseline Input</h3>
+                    <input
+                        id="baseline-input"
+                        class="baseline-input"
+                        type="text"
+                        placeholder="No focus rule…"
+                        style="border:1px solid rgb(209,213,219); border-radius:6px; padding:8px 12px; font-size:14px; width:100%; box-sizing:border-box; outline:none;"
+                    >
+                    <div class="mt-3">
+                        <span class="cssom-chip fail">Audit :focus border-color → expects 'Not Defined'</span>
+                    </div>
+                </div>
+
+                <!-- Baseline Link -->
+                <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Baseline Link</h3>
+                    <a
+                        id="baseline-link"
+                        class="baseline-link"
+                        href="#section-baseline"
+                        style="color:rgb(17,24,39); font-size:14px; font-weight:500;"
+                    >Plain link, no :hover rule</a>
+                    <div class="mt-3">
+                        <span class="cssom-chip fail">Audit :hover color → expects 'Not Defined'</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
     </main>
+
+    <script>
+        /**
+         * Resets any JS-driven inline style overrides on gallery elements
+         * so audits rely purely on the CSSOM <style> rules above.
+         */
+        function resetGallery() {
+            const ids = ['gallery-btn', 'gallery-input', 'gallery-link', 'gallery-parent'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.removeAttribute('style');
+            });
+            console.log('[Test Lab] Gallery styles reset — CSSOM rules are now the sole source of truth.');
+        }
+    </script>
 </body>
 
 </html>
