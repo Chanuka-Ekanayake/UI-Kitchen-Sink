@@ -17,7 +17,7 @@ interface StandardBlockProps {
   block: ComponentBlock;
   onUpdate: (id: string, updates: Partial<ComponentBlock>) => void;
   onRemove: (id: string) => void;
-  onToggleEnabled: (id: string) => void;
+  onToggleEnabled: (id: string, status: boolean) => void;
 }
 
 export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: StandardBlockProps) {
@@ -90,21 +90,17 @@ export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: St
   };
 
   return (
-    <div className={`p-4 border rounded-xl flex items-start gap-3 transition-colors duration-200 group ${!block.isEnabled ? 'bg-gray-50/80 opacity-60 border-gray-200' : isValid ? 'bg-slate-50 border-gray-200 hover:border-[#008000]/40 shadow-sm' : 'bg-red-50/50 border-red-300'}`}>
-      <div className="flex-1 flex flex-col gap-4 min-w-0">
-        {/* Enable/Disable Toggle */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => onToggleEnabled(block.id)}
-            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-              block.isEnabled ? 'text-[#008000]' : 'text-gray-400'
-            }`}
-            title={block.isEnabled ? 'Click to disable' : 'Click to enable'}
-          >
-            {block.isEnabled ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-            {block.isEnabled ? 'Enabled' : 'Disabled'}
-          </button>
-        </div>
+    <div className={`p-4 border rounded-xl flex items-start gap-4 transition-all duration-300 group relative ${
+      !block.isEnabled 
+        ? 'bg-slate-50 border-slate-200' 
+        : isValid 
+          ? 'bg-white border-blue-500 shadow-md' 
+          : 'bg-red-50/50 border-red-300'
+    }`}>
+      
+      {/* Main Content Area (affected by opacity) */}
+      <div className={`flex-1 flex flex-col gap-4 min-w-0 transition-opacity duration-300 ${!block.isEnabled ? 'opacity-60 grayscale-[50%]' : 'opacity-100'}`}>
+        
         {/* ROW 1: Component Name */}
         <div>
           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
@@ -246,14 +242,31 @@ export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: St
 
       </div>
 
-      {/* Global Row Deletion Node */}
-      <button 
-        onClick={() => onRemove(block.id)}
-        className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-md transition-colors shrink-0 mt-[1.35rem]"
-        title="Remove Component"
-      >
-        <Trash2 size={16} />
-      </button>
+      {/* Action Controls (NOT affected by opacity) - Top Right */}
+      <div className="flex items-center gap-2 shrink-0 self-start">
+        {/* Enable/Disable Toggle */}
+        <button
+          onClick={() => onToggleEnabled(block.id, !block.isEnabled)}
+          className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-all ${
+            block.isEnabled 
+              ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200' 
+              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
+          }`}
+          title={block.isEnabled ? 'Click to disable' : 'Click to enable'}
+        >
+          {block.isEnabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+          <span className="hidden sm:inline">{block.isEnabled ? 'Enabled' : 'Disabled'}</span>
+        </button>
+
+        {/* Global Row Deletion Node */}
+        <button 
+          onClick={() => onRemove(block.id)}
+          className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors"
+          title="Remove Component"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
 
     </div>
   );
