@@ -465,6 +465,11 @@ const overlayManager = new OverlayManager();
 chrome.runtime.onMessage.addListener(
   (request: ScannerMessage, sender, sendResponse) => {
     switch (request.action) {
+      case 'PING':
+        console.log('[Content Script] Handshake Received.');
+        sendResponse('PONG');
+        return true;
+
       case 'START_SCAN':
         console.log('[UI Scanner] Received START_SCAN — initiating audit…');
         const auditFindings = runAudit(request.standards, request.debug ?? false);

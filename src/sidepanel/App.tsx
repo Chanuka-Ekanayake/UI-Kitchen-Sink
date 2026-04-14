@@ -183,9 +183,15 @@ export default function App() {
     updateActiveProfileComponents(comps => comps.filter(c => c.id !== id));
   };
 
-  const toggleComponent = (id: string) => {
+  const toggleComponent = (id: string, status?: boolean) => {
     updateActiveProfileComponents(comps =>
-      comps.map(c => c.id === id ? { ...c, isEnabled: !c.isEnabled } : c)
+      comps.map(c => c.id === id ? { ...c, isEnabled: status !== undefined ? status : !c.isEnabled } : c)
+    );
+  };
+
+  const toggleAllComponents = (isEnabled: boolean) => {
+    updateActiveProfileComponents(comps =>
+      comps.map(c => ({ ...c, isEnabled }))
     );
   };
 
@@ -218,18 +224,45 @@ export default function App() {
         throw new Error('Cannot scan restricted browser pages.');
       }
 
-      // Content script injection check
-      const checkResult = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => (window as any).__UI_VALIDATOR_LOADED__ === true,
-      }).catch(() => [{ result: false }]);
+      // 1. Robust Handshake Protocol
+      let isInjected = false;
+      try {
+        const pingResponse = await Promise.race([
+          sendTabMessage('PING'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500))
+        ]);
+        if (pingResponse === 'PONG') {
+          isInjected = true;
+        }
+      } catch (err) {
+        // PING failed or timed out — assumes script hasn't been injected or is unresponsive
+      }
 
-      if (checkResult?.[0]?.result !== true) {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['src/content/index.ts-loader.js'],
-        }).catch(err => console.warn('Manual injection error:', err));
-        await new Promise(resolve => setTimeout(resolve, 250));
+      if (!isInjected) {
+        console.log('[UI Scanner] Injecting content script...');
+        try {
+          const manifest = chrome.runtime.getManifest();
+          const contentScriptPath = manifest.content_scripts?.[0]?.js?.[0];
+
+          let targetPath = contentScriptPath;
+          if (!targetPath) {
+            console.warn('[UI Scanner] Manifest content script path undefined. Falling back to default path...');
+            targetPath = 'src/content/index.js'; // Fallback path
+          }
+
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: [targetPath],
+          });
+          // Wait briefly for content script globals to instantiate
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err: any) {
+          console.warn('Manual injection error:', err);
+          if (err.message && err.message.includes('Could not load file')) {
+            throw new Error("Could not load content script. Please 'Reload Page' and try again.");
+          }
+          throw err;
+        }
       }
 
       // Map only enabled components from active profile
@@ -357,6 +390,7 @@ export default function App() {
               onCreate={createProfile}
               onRename={renameProfile}
               onDelete={deleteProfile}
+              onToggleAll={toggleAllComponents}
             />
 
             {!activeProfile ? (

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Profile } from '../../shared/types';
-import { Plus, Pencil, Trash2, Check, X, ChevronDown, FolderOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronDown, FolderOpen, ToggleLeft, ToggleRight } from 'lucide-react';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +11,7 @@ interface ProfileManagerProps {
   onCreate: (name: string) => void;
   onRename: (id: string, newName: string) => void;
   onDelete: (id: string) => void;
+  onToggleAll: (isEnabled: boolean) => void;
 }
 
 export interface ProfileManagerHandle {
@@ -27,6 +28,7 @@ export const ProfileManager = forwardRef<ProfileManagerHandle, ProfileManagerPro
     onCreate,
     onRename,
     onDelete,
+    onToggleAll,
   }, ref) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -37,6 +39,13 @@ export const ProfileManager = forwardRef<ProfileManagerHandle, ProfileManagerPro
 
   const activeProfile = profiles.find(p => p.id === activeProfileId) ?? null;
   const canDelete = profiles.length > 1;
+
+  // Master Toggle Logic
+  const allComponents = activeProfile?.components || [];
+  const totalCount = allComponents.length;
+  const enabledCount = allComponents.filter(c => c.isEnabled).length;
+  // true only if all components are enabled
+  const isMasterEnabled = totalCount > 0 && enabledCount === totalCount;
 
   // Expose triggerRename to parent via ref
   useImperativeHandle(ref, () => ({
@@ -238,6 +247,27 @@ export const ProfileManager = forwardRef<ProfileManagerHandle, ProfileManagerPro
           </div>
         )}
       </div>
+
+      {/* Secondary Header Row: Master Toggle & Selective Scan Status */}
+      {activeProfile && totalCount > 0 && (
+        <div className="flex items-center justify-between mt-2.5 px-0.5 pt-1.5 border-t border-gray-200/60">
+          <button
+            type="button"
+            onClick={() => onToggleAll(!isMasterEnabled)}
+            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              isMasterEnabled ? 'text-[#008000]' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            title={isMasterEnabled ? 'Click to disable all components' : 'Click to enable all components'}
+          >
+            {isMasterEnabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+            Enable All
+          </button>
+          
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+             <span className={enabledCount > 0 ? 'text-[#008000]' : 'text-gray-400'}>{enabledCount}</span> / {totalCount} Active
+          </div>
+        </div>
+      )}
     </div>
   );
 });
