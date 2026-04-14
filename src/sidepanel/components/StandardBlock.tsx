@@ -103,8 +103,11 @@ export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: St
         
         {/* ROW 1: Component Name */}
         <div>
-          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
-            Component Name <span className="text-red-500">*</span>
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 flex items-center justify-between">
+            <span>Component Name <span className="text-red-500">*</span></span>
+            {!block.htmlTag.trim() && (block.cssClass.trim() || block.cssId.trim()) && (
+              <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded-sm font-semibold tracking-wide">UNIVERSAL</span>
+            )}
           </label>
           <input 
             type="text" 
@@ -127,7 +130,7 @@ export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: St
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="text"
-                placeholder="Search..."
+                placeholder="Any element (*)"
                 value={tagSearch}
                 onChange={(e) => {
                   setTagSearch(e.target.value);
@@ -135,12 +138,18 @@ export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: St
                 }}
                 onFocus={() => setDropdownOpen(true)}
                 onBlur={handleTagBlur}
-                className={`w-full text-sm font-mono bg-white border rounded-md pl-8 pr-3 py-2 outline-none transition-shadow placeholder:font-sans placeholder:text-gray-300 ${!block.htmlTag ? 'border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-200 focus:border-[#008000] focus:ring-1 focus:ring-[#008000]'}`}
+                className={`w-full text-sm font-mono bg-white border rounded-md pl-8 pr-3 py-2 outline-none transition-shadow placeholder:font-sans placeholder:text-gray-400 ${!block.htmlTag && !block.cssClass && !block.cssId ? 'border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-200 focus:border-[#008000] focus:ring-1 focus:ring-[#008000]'}`}
               />
             </div>
             
             {dropdownOpen && (
               <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl z-20 max-h-40 overflow-y-auto scrollbar-thin">
+                <div 
+                  onClick={() => handleTagSelect('')}
+                  className="px-3 py-2 text-sm font-sans hover:bg-gray-50 cursor-pointer text-gray-400 italic"
+                >
+                  Any element (*)
+                </div>
                 {filteredTags.map(tag => (
                   <div 
                     key={tag} 
