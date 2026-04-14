@@ -292,6 +292,9 @@ export default function App() {
       };
 
       const dynamicStandards = mapStateToScannerFormat(enabledComponents);
+      dynamicStandards.forEach(std => {
+        console.log(`[Universal Scanner] Targeting: "${std.selector}"`);
+      });
 
       for (const std of dynamicStandards) {
         try {
