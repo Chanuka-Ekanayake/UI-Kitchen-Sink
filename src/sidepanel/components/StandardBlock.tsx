@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ComponentBlock, StyleRule } from '../../shared/types';
-import { Trash2, Search, Info, Plus } from 'lucide-react';
+import { Trash2, Search, Info, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { StyleRuleField } from './StyleRuleField';
 
 const COMMON_TAGS = ['div', 'button', 'input', 'h1', 'h2', 'span', 'section', 'a', 'p', 'img'];
 
 // Helper explicitly defining computed string concatenation across component layers natively
 export const getComputedSelector = (block: ComponentBlock): string => {
-  if (!block.htmlTag) return '';
-  let selector = block.htmlTag;
+  let selector = block.htmlTag || '';
   if (block.cssClass) selector += `.${block.cssClass}`;
   if (block.cssId) selector += `#${block.cssId}`;
   return selector;
@@ -18,9 +17,10 @@ interface StandardBlockProps {
   block: ComponentBlock;
   onUpdate: (id: string, updates: Partial<ComponentBlock>) => void;
   onRemove: (id: string) => void;
+  onToggleEnabled: (id: string) => void;
 }
 
-export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps) {
+export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: StandardBlockProps) {
   const [tagSearch, setTagSearch] = useState(block.htmlTag);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -65,7 +65,8 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
   const filteredTags = COMMON_TAGS.filter(tag => tag.includes(tagSearch.toLowerCase()));
   const isCustomTag = tagSearch.trim() && !COMMON_TAGS.includes(tagSearch.toLowerCase());
 
-  const isValid = block.name.trim() !== '' && block.htmlTag.trim() !== '';
+  const hasSelector = block.htmlTag.trim() || block.cssClass.trim() || block.cssId.trim();
+  const isValid = block.name.trim() !== '' && hasSelector;
 
   const handleAddRule = () => {
     const newRule: StyleRule = {
@@ -89,9 +90,21 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
   };
 
   return (
-    <div className={`p-4 bg-slate-50 border rounded-xl flex items-start gap-3 transition-colors duration-200 group ${isValid ? 'border-gray-200 hover:border-[#008000]/40 shadow-sm' : 'border-red-300 bg-red-50/50'}`}>
+    <div className={`p-4 border rounded-xl flex items-start gap-3 transition-colors duration-200 group ${!block.isEnabled ? 'bg-gray-50/80 opacity-60 border-gray-200' : isValid ? 'bg-slate-50 border-gray-200 hover:border-[#008000]/40 shadow-sm' : 'bg-red-50/50 border-red-300'}`}>
       <div className="flex-1 flex flex-col gap-4 min-w-0">
-        
+        {/* Enable/Disable Toggle */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => onToggleEnabled(block.id)}
+            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              block.isEnabled ? 'text-[#008000]' : 'text-gray-400'
+            }`}
+            title={block.isEnabled ? 'Click to disable' : 'Click to enable'}
+          >
+            {block.isEnabled ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+            {block.isEnabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
         {/* ROW 1: Component Name */}
         <div>
           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
@@ -112,7 +125,7 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
           {/* Column A: Tag Combobox */}
           <div className="relative" ref={dropdownRef}>
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
-              HTML Tag <span className="text-red-500">*</span>
+              HTML Tag
             </label>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
