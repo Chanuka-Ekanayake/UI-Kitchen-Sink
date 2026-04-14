@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ComponentBlock, StyleRule } from '../../shared/types';
-import { Trash2, Search, Info, Plus } from 'lucide-react';
+import { Trash2, Search, Info, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { StyleRuleField } from './StyleRuleField';
 
 const COMMON_TAGS = ['div', 'button', 'input', 'h1', 'h2', 'span', 'section', 'a', 'p', 'img'];
 
 // Helper explicitly defining computed string concatenation across component layers natively
 export const getComputedSelector = (block: ComponentBlock): string => {
-  if (!block.htmlTag) return '';
-  let selector = block.htmlTag;
+  let selector = block.htmlTag || '';
   if (block.cssClass) selector += `.${block.cssClass}`;
   if (block.cssId) selector += `#${block.cssId}`;
   return selector;
@@ -18,9 +17,10 @@ interface StandardBlockProps {
   block: ComponentBlock;
   onUpdate: (id: string, updates: Partial<ComponentBlock>) => void;
   onRemove: (id: string) => void;
+  onToggleEnabled: (id: string, status: boolean) => void;
 }
 
-export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps) {
+export function StandardBlock({ block, onUpdate, onRemove, onToggleEnabled }: StandardBlockProps) {
   const [tagSearch, setTagSearch] = useState(block.htmlTag);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -65,7 +65,8 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
   const filteredTags = COMMON_TAGS.filter(tag => tag.includes(tagSearch.toLowerCase()));
   const isCustomTag = tagSearch.trim() && !COMMON_TAGS.includes(tagSearch.toLowerCase());
 
-  const isValid = block.name.trim() !== '' && block.htmlTag.trim() !== '';
+  const hasSelector = block.htmlTag.trim() || block.cssClass.trim() || block.cssId.trim();
+  const isValid = block.name.trim() !== '' && hasSelector;
 
   const handleAddRule = () => {
     const newRule: StyleRule = {
@@ -89,13 +90,24 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
   };
 
   return (
-    <div className={`p-4 bg-slate-50 border rounded-xl flex items-start gap-3 transition-colors duration-200 group ${isValid ? 'border-gray-200 hover:border-[#008000]/40 shadow-sm' : 'border-red-300 bg-red-50/50'}`}>
-      <div className="flex-1 flex flex-col gap-4 min-w-0">
+    <div className={`p-4 border rounded-xl flex items-start gap-4 transition-all duration-300 group relative ${
+      !block.isEnabled 
+        ? 'bg-slate-50 border-slate-200' 
+        : isValid 
+          ? 'bg-white border-blue-500 shadow-md' 
+          : 'bg-red-50/50 border-red-300'
+    }`}>
+      
+      {/* Main Content Area (affected by opacity) */}
+      <div className={`flex-1 flex flex-col gap-4 min-w-0 transition-opacity duration-300 ${!block.isEnabled ? 'opacity-60 grayscale-[50%]' : 'opacity-100'}`}>
         
         {/* ROW 1: Component Name */}
         <div>
-          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
-            Component Name <span className="text-red-500">*</span>
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 flex items-center justify-between">
+            <span>Component Name <span className="text-red-500">*</span></span>
+            {!block.htmlTag.trim() && (block.cssClass.trim() || block.cssId.trim()) && (
+              <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded-sm font-semibold tracking-wide">UNIVERSAL</span>
+            )}
           </label>
           <input 
             type="text" 
@@ -112,13 +124,13 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
           {/* Column A: Tag Combobox */}
           <div className="relative" ref={dropdownRef}>
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">
-              HTML Tag <span className="text-red-500">*</span>
+              HTML Tag
             </label>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="text"
-                placeholder="Search..."
+                placeholder="Any element (*)"
                 value={tagSearch}
                 onChange={(e) => {
                   setTagSearch(e.target.value);
@@ -126,12 +138,18 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
                 }}
                 onFocus={() => setDropdownOpen(true)}
                 onBlur={handleTagBlur}
-                className={`w-full text-sm font-mono bg-white border rounded-md pl-8 pr-3 py-2 outline-none transition-shadow placeholder:font-sans placeholder:text-gray-300 ${!block.htmlTag ? 'border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-200 focus:border-[#008000] focus:ring-1 focus:ring-[#008000]'}`}
+                className={`w-full text-sm font-mono bg-white border rounded-md pl-8 pr-3 py-2 outline-none transition-shadow placeholder:font-sans placeholder:text-gray-400 ${!block.htmlTag && !block.cssClass && !block.cssId ? 'border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-200 focus:border-[#008000] focus:ring-1 focus:ring-[#008000]'}`}
               />
             </div>
             
             {dropdownOpen && (
               <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl z-20 max-h-40 overflow-y-auto scrollbar-thin">
+                <div 
+                  onClick={() => handleTagSelect('')}
+                  className="px-3 py-2 text-sm font-sans hover:bg-gray-50 cursor-pointer text-gray-400 italic"
+                >
+                  Any element (*)
+                </div>
                 {filteredTags.map(tag => (
                   <div 
                     key={tag} 
@@ -233,14 +251,31 @@ export function StandardBlock({ block, onUpdate, onRemove }: StandardBlockProps)
 
       </div>
 
-      {/* Global Row Deletion Node */}
-      <button 
-        onClick={() => onRemove(block.id)}
-        className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-md transition-colors shrink-0 mt-[1.35rem]"
-        title="Remove Component"
-      >
-        <Trash2 size={16} />
-      </button>
+      {/* Action Controls (NOT affected by opacity) - Top Right */}
+      <div className="flex items-center gap-2 shrink-0 self-start">
+        {/* Enable/Disable Toggle */}
+        <button
+          onClick={() => onToggleEnabled(block.id, !block.isEnabled)}
+          className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-md transition-all ${
+            block.isEnabled 
+              ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200' 
+              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
+          }`}
+          title={block.isEnabled ? 'Click to disable' : 'Click to enable'}
+        >
+          {block.isEnabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+          <span className="hidden sm:inline">{block.isEnabled ? 'Enabled' : 'Disabled'}</span>
+        </button>
+
+        {/* Global Row Deletion Node */}
+        <button 
+          onClick={() => onRemove(block.id)}
+          className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors"
+          title="Remove Component"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
 
     </div>
   );
