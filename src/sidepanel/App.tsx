@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { ValidationResult, ComponentBlock, ComponentStandard, Profile } from '../shared/types';
 import { GlobalSummary } from './components/GlobalSummary';
 import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
 import { StandardBlock } from './components/StandardBlock';
-import { Plus, FolderPlus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
+import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
+import { Plus } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
@@ -43,10 +45,8 @@ export default function App() {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Profile CRUD UI state
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
+  // ProfileManager ref for triggering rename from App
+  const profileManagerRef = useRef<ProfileManagerHandle>(null);
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -110,34 +110,54 @@ export default function App() {
     const np = createDefaultProfile(name);
     setProfiles(prev => [...prev, np]);
     setActiveProfileId(np.id);
-    setProfileDropdownOpen(false);
+    // Auto-trigger rename mode so user can name it immediately
+    setTimeout(() => {
+      profileManagerRef.current?.triggerRename(name);
+    }, 50);
   };
 
-  const deleteProfile = (id: string) => {
-    setProfiles(prev => {
-      const next = prev.filter(p => p.id !== id);
-      if (next.length === 0) {
-        const fallback = createDefaultProfile();
-        setActiveProfileId(fallback.id);
-        return [fallback];
+  const deleteProfile = (idToDelete: string) => {
+    // Check Count: If profiles.length <= 1, abort immediately
+    if (profiles.length <= 1) return;
+
+    let nextActiveId = activeProfileId;
+
+    // Identify Next Active: If idToDelete === activeProfileId
+    if (idToDelete === activeProfileId) {
+      const deletedIndex = profiles.findIndex(p => p.id === idToDelete);
+      if (deletedIndex === -1) return;
+
+      if (deletedIndex === 0) {
+        nextActiveId = profiles[1].id;
+      } else {
+        nextActiveId = profiles[0].id;
       }
-      if (activeProfileId === id) {
-        setActiveProfileId(next[0].id);
-      }
-      return next;
+    }
+
+    const nextProfiles = profiles.filter(p => p.id !== idToDelete);
+
+    console.group('Profile Deletion');
+    console.log(`1. Profile being deleted: ${idToDelete}`);
+    console.log(`2. New profile being selected as active: ${nextActiveId}`);
+    console.log(`3. Final length of the profiles array: ${nextProfiles.length}`);
+    console.groupEnd();
+
+    // Sequential State Update with flushSync
+    flushSync(() => {
+      setActiveProfileId(nextActiveId);
+    });
+    setProfiles(nextProfiles);
+
+    // Persistence Lock
+    chrome.storage.local.set({
+      ui_profiles: nextProfiles,
+      ui_active_profile_id: nextActiveId,
     });
   };
 
   const renameProfile = (id: string, newName: string) => {
     if (!newName.trim()) return;
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, name: newName.trim() } : p));
-    setRenamingId(null);
-    setRenameValue('');
-  };
-
-  const startRename = (p: Profile) => {
-    setRenamingId(p.id);
-    setRenameValue(p.name);
   };
 
   // ─── Component CRUD (scoped to active profile) ────────────────────
@@ -276,68 +296,6 @@ export default function App() {
 
   // ─── Render ───────────────────────────────────────────────────────
 
-  const renderProfileSelector = () => (
-    <div className="relative mb-3" onMouseLeave={() => setProfileDropdownOpen(false)}>
-      <button
-        onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-        className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-[#008000]/40 transition-colors shadow-sm"
-      >
-        <span className="truncate">{activeProfile?.name ?? 'Select Profile'}</span>
-        <ChevronDown size={14} className={`text-gray-400 transition-transform ${profileDropdownOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {profileDropdownOpen && (
-        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-30 max-h-56 overflow-y-auto scrollbar-thin">
-          {profiles.map(p => (
-            <div
-              key={p.id}
-              className={`flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer group ${p.id === activeProfileId ? 'bg-green-50 text-[#008000] font-semibold' : 'text-gray-700'}`}
-            >
-              {renamingId === p.id ? (
-                <div className="flex items-center gap-1 flex-1 min-w-0">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') renameProfile(p.id, renameValue); if (e.key === 'Escape') setRenamingId(null); }}
-                    className="flex-1 text-xs font-medium bg-white border border-gray-300 rounded px-2 py-1 outline-none focus:border-[#008000]"
-                  />
-                  <button onClick={() => renameProfile(p.id, renameValue)} className="text-[#008000] hover:bg-green-50 p-1 rounded"><Check size={12} /></button>
-                  <button onClick={() => setRenamingId(null)} className="text-gray-400 hover:bg-gray-100 p-1 rounded"><X size={12} /></button>
-                </div>
-              ) : (
-                <>
-                  <span
-                    className="truncate flex-1"
-                    onClick={() => { setActiveProfileId(p.id); setProfileDropdownOpen(false); }}
-                  >
-                    {p.name}
-                  </span>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
-                    <button onClick={(e) => { e.stopPropagation(); startRename(p); }} className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100" title="Rename"><Pencil size={11} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteProfile(p.id); }} className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50" title="Delete"><Trash2 size={11} /></button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-
-          {/* Create new profile */}
-          <div className="border-t border-gray-100 px-3 py-2">
-            <button
-              onClick={() => createProfile(`Profile ${profiles.length + 1}`)}
-              className="flex items-center gap-2 w-full text-xs text-gray-500 hover:text-[#008000] font-medium py-1 transition-colors"
-            >
-              <FolderPlus size={13} />
-              <span>New Profile</span>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   const renderContentView = () => {
     switch (currentView) {
       case 'SCANNING':
@@ -390,36 +348,51 @@ export default function App() {
       default:
         return (
           <div className="w-full h-full flex flex-col min-h-0">
-            {/* Profile Selector */}
-            {renderProfileSelector()}
+            {/* Profile Manager Header */}
+            <ProfileManager
+              ref={profileManagerRef}
+              profiles={profiles}
+              activeProfileId={activeProfileId}
+              onSwitch={setActiveProfileId}
+              onCreate={createProfile}
+              onRename={renameProfile}
+              onDelete={deleteProfile}
+            />
 
-            <div className="flex-1 w-full overflow-y-auto pr-2 pb-2 flex flex-col gap-4 scrollbar-thin">
-              {components.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 text-center px-6">
-                  <p className="text-sm font-medium text-gray-500">No components defined.</p>
-                  <p className="text-xs text-gray-400 mt-1">Add your first component to begin the audit.</p>
-                </div>
-              ) : (
-                components.map((block) => (
-                  <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <StandardBlock
-                      block={block}
-                      onUpdate={handleUpdateComponent}
-                      onRemove={handleRemoveComponent}
-                      onToggleEnabled={toggleComponent}
-                    />
+            {!activeProfile ? (
+              <div className="flex-1 flex flex-col items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008000] mb-4"></div>
+                <p className="text-sm text-gray-500 font-medium">Loading profile...</p>
+              </div>
+            ) : (
+              <div className="flex-1 w-full overflow-y-auto pr-2 pb-2 flex flex-col gap-4 scrollbar-thin">
+                {components.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 text-center px-6">
+                    <p className="text-sm font-medium text-gray-500">No components defined.</p>
+                    <p className="text-xs text-gray-400 mt-1">Add your first component to begin the audit.</p>
                   </div>
-                ))
-              )}
+                ) : (
+                  components.map((block) => (
+                    <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <StandardBlock
+                        block={block}
+                        onUpdate={handleUpdateComponent}
+                        onRemove={handleRemoveComponent}
+                        onToggleEnabled={toggleComponent}
+                      />
+                    </div>
+                  ))
+                )}
 
-              <button
-                onClick={addComponent}
-                className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-gray-200 hover:border-[#008000]/50 hover:bg-[#008000]/5 text-gray-500 hover:text-[#008000] font-medium rounded-xl transition-all"
-              >
-                <Plus size={16} />
-                <span>Add Component Node</span>
-              </button>
-            </div>
+                <button
+                  onClick={addComponent}
+                  className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-gray-200 hover:border-[#008000]/50 hover:bg-[#008000]/5 text-gray-500 hover:text-[#008000] font-medium rounded-xl transition-all"
+                >
+                  <Plus size={16} />
+                  <span>Add Component Node</span>
+                </button>
+              </div>
+            )}
 
             <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100">
               <button
