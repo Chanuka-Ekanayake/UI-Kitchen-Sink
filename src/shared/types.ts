@@ -26,7 +26,14 @@ export interface ComponentBlock {
   htmlTag: string;
   cssClass: string;
   cssId: string;
+  isEnabled: boolean;
   styleRules: StyleRule[];
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  components: ComponentBlock[];
 }
 
 export interface PropertyResult {
