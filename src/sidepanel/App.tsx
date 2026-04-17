@@ -6,9 +6,18 @@ import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
 import { StandardBlock } from './components/StandardBlock';
 import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
+import { MergeConflictModal } from './components/MergeConflictModal';
+import { ImportOptionModal } from './components/ImportOptionModal';
 import { Plus, Download, Upload } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 import { exportProfile, handleImportFile } from './utils/serialization';
+import {
+  processImport,
+  MergeConflict,
+  MergeResolution,
+  MergeMode,
+  generateUniqueName,
+} from './utils/mergeEngine';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
 
@@ -54,6 +63,16 @@ export default function App() {
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+
+  // Merge conflict state
+  const [pendingConflicts, setPendingConflicts] = useState<MergeConflict[]>([]);
+  const [importedProfileCache, setImportedProfileCache] = useState<Profile | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
+  const [mergeMode, setMergeMode] = useState<MergeMode>('NEW');
+  const [partialResolutions, setPartialResolutions] = useState<Record<string, MergeResolution>>({});
+
+  // Import destination choice buffer (cleared when user cancels or commits)
+  const [pendingImportData, setPendingImportData] = useState<Profile | null>(null);
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -221,21 +240,101 @@ export default function App() {
     }
   };
 
+  /**
+   * Step 1: Parse the file and buffer it — do NOT write to profiles yet.
+   * The ImportOptionModal will ask the user where the data should go.
+   */
   const importProfile = async (file: File) => {
     setIsImporting(true);
     try {
       const { profile } = await handleImportFile(file, 'add-as-new');
-      // Always add as new — never overwrite existing data without explicit user action
-      setProfiles(prev => [...prev, profile]);
-      setActiveProfileId(profile.id);
-      showToast(`'${profile.name}' imported successfully.`);
+      // Buffer — wait for the user to choose New or Merge
+      setPendingImportData(profile);
     } catch (err: any) {
       showToast(err.message ?? 'Import failed.', 'error');
     } finally {
       setIsImporting(false);
-      // Reset input so the same file can be re-imported if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  /** Step 2a — User chose 'Create New Profile' */
+  const handleImportChooseNew = () => {
+    if (!pendingImportData) return;
+    const result = processImport({
+      importedProfile: pendingImportData,
+      existingProfiles: profiles,
+      targetProfileId: null,
+      mode: 'NEW',
+      resolutions: {},
+    });
+    setProfiles(result.updatedProfiles);
+    setActiveProfileId(result.newActiveProfileId);
+    const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
+    showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+    setPendingImportData(null);
+  };
+
+  /** Step 2b — User chose 'Merge into Active Profile' */
+  const handleImportChooseMerge = () => {
+    if (!pendingImportData) return;
+    const result = processImport({
+      importedProfile: pendingImportData,
+      existingProfiles: profiles,
+      targetProfileId: activeProfileId,
+      mode: 'APPEND',
+      resolutions: {},
+    });
+
+    if (result.pendingConflicts.length > 0) {
+      // Stash and open conflict modal
+      setImportedProfileCache(pendingImportData);
+      setMergeTargetId(activeProfileId);
+      setMergeMode('APPEND');
+      setPartialResolutions({});
+      setPendingConflicts(result.pendingConflicts);
+    } else {
+      setProfiles(result.updatedProfiles);
+      setActiveProfileId(result.newActiveProfileId);
+      const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
+      showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+    }
+    setPendingImportData(null);
+  };
+
+  /** Clears the pending buffer without writing anything */
+  const handleImportOptionCancel = () => {
+    setPendingImportData(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  /** Called by MergeConflictModal when the user has resolved all pending conflicts */
+  const handleConflictComplete = (resolutions: Record<string, MergeResolution>) => {
+    if (!importedProfileCache) return;
+    const allResolutions = { ...partialResolutions, ...resolutions };
+    const result = processImport({
+      importedProfile: importedProfileCache,
+      existingProfiles: profiles,
+      targetProfileId: mergeTargetId,
+      mode: mergeMode,
+      resolutions: allResolutions,
+    });
+    setProfiles(result.updatedProfiles);
+    setActiveProfileId(result.newActiveProfileId);
+    const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
+    showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+    // Clear conflict state
+    setPendingConflicts([]);
+    setImportedProfileCache(null);
+    setPartialResolutions({});
+  };
+
+  const handleImportCancel = () => {
+    setPendingConflicts([]);
+    setImportedProfileCache(null);
+    setPartialResolutions({});
+    setPendingImportData(null);
+    showToast('Import cancelled.', 'error');
   };
 
   // ─── Scan logic ───────────────────────────────────────────────────
@@ -539,6 +638,26 @@ export default function App() {
       <div className="w-full h-full transition-all duration-300 ease-in-out opacity-100 flex flex-col min-h-0">
         {renderContentView()}
       </div>
+
+      {/* Import Destination Choice Modal */}
+      {pendingImportData && !pendingConflicts.length && (
+        <ImportOptionModal
+          importedProfile={pendingImportData}
+          activeProfileName={activeProfile?.name ?? null}
+          onSelectNew={handleImportChooseNew}
+          onSelectMerge={handleImportChooseMerge}
+          onCancel={handleImportOptionCancel}
+        />
+      )}
+
+      {/* Merge Conflict Modal */}
+      {pendingConflicts.length > 0 && (
+        <MergeConflictModal
+          conflicts={pendingConflicts}
+          onComplete={handleConflictComplete}
+          onCancel={handleImportCancel}
+        />
+      )}
 
       {/* Toast Notification */}
       {toast && (
