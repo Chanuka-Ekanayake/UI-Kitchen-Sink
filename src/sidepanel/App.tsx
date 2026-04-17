@@ -8,6 +8,7 @@ import { StandardBlock } from './components/StandardBlock';
 import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
 import { MergeConflictModal } from './components/MergeConflictModal';
 import { ImportOptionModal } from './components/ImportOptionModal';
+import { ImportSummary, ImportSummaryData } from './components/ImportSummary';
 import { Plus, Download, Upload, FileText } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 import { exportProfile, handleImportFile } from './utils/serialization';
@@ -83,6 +84,11 @@ export default function App() {
   const [pendingSourceType, setPendingSourceType] = useState<'json' | 'css'>('json');
   const [pendingCssWarnings, setPendingCssWarnings] = useState<string[]>([]);
   const [pendingIgnoredSelectors, setPendingIgnoredSelectors] = useState<string[]>([]);
+
+  // Post-import diagnostic summary
+  const [importSummaryData, setImportSummaryData] = useState<ImportSummaryData | null>(null);
+  // IDs of components just merged in — used to flash-highlight them
+  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -307,7 +313,7 @@ export default function App() {
     }
   };
 
-  /** Step 2a — User chose 'Create New Profile' */
+  /** Step 2a — User chose 'Import as New Profile' */
   const handleImportChooseNew = () => {
     if (!pendingImportData) return;
     const result = processImport({
@@ -319,10 +325,18 @@ export default function App() {
     });
     setProfiles(result.updatedProfiles);
     setActiveProfileId(result.newActiveProfileId);
-    const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
-    showToast(
-      `Import complete: ${addedCount} added, ${skipped} skipped${pendingSourceType === 'css' && pendingIgnoredSelectors.length > 0 ? `, ${pendingIgnoredSelectors.length} complex selectors unsupported` : ''}.${pendingSourceType === 'css' ? ` (${addedCount} CSS rules converted)` : ''}`
-    );
+    const { addedCount, skippedCount, conflictsResolved } = result.summary;
+    // Show the diagnostic modal instead of a toast
+    const newProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+    setImportSummaryData({
+      mode: 'new',
+      targetProfileName: newProfile?.name ?? pendingImportData.name,
+      addedCount,
+      skippedCount,
+      conflictsResolved,
+      ignoredSelectors: pendingIgnoredSelectors,
+      isCss: pendingSourceType === 'css',
+    });
     setPendingImportData(null);
     setPendingIgnoredSelectors([]);
   };
@@ -348,10 +362,24 @@ export default function App() {
     } else {
       setProfiles(result.updatedProfiles);
       setActiveProfileId(result.newActiveProfileId);
-      const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
-      showToast(
-        `Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved${pendingSourceType === 'css' && pendingIgnoredSelectors.length > 0 ? `, ${pendingIgnoredSelectors.length} complex selectors skipped` : ''}.`
-      );
+      const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
+      // Flash-highlight the newly added component IDs
+      const targetBefore = profiles.find(p => p.id === activeProfileId);
+      const beforeIds = new Set(targetBefore?.components.map(c => c.id) ?? []);
+      const addedIds = new Set(finalComponents.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+      setNewlyAddedIds(addedIds);
+      setTimeout(() => setNewlyAddedIds(new Set()), 2500);
+      // Show diagnostic modal
+      const targetProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+      setImportSummaryData({
+        mode: 'merge',
+        targetProfileName: targetProfile?.name ?? 'Active Profile',
+        addedCount,
+        skippedCount,
+        conflictsResolved,
+        ignoredSelectors: pendingIgnoredSelectors,
+        isCss: pendingSourceType === 'css',
+      });
     }
     setPendingImportData(null);
     setPendingIgnoredSelectors([]);
@@ -379,8 +407,24 @@ export default function App() {
     });
     setProfiles(result.updatedProfiles);
     setActiveProfileId(result.newActiveProfileId);
-    const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
-    showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+    const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
+    // Flash-highlight newly added components
+    const targetBefore = profiles.find(p => p.id === mergeTargetId);
+    const beforeIds = new Set(targetBefore?.components.map(c => c.id) ?? []);
+    const addedIds = new Set(finalComponents.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+    setNewlyAddedIds(addedIds);
+    setTimeout(() => setNewlyAddedIds(new Set()), 2500);
+    // Show diagnostic modal
+    const targetProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+    setImportSummaryData({
+      mode: 'merge',
+      targetProfileName: targetProfile?.name ?? 'Active Profile',
+      addedCount,
+      skippedCount,
+      conflictsResolved,
+      ignoredSelectors: pendingIgnoredSelectors,
+      isCss: pendingSourceType === 'css',
+    });
     // Clear conflict state
     setPendingConflicts([]);
     setImportedProfileCache(null);
@@ -393,6 +437,7 @@ export default function App() {
     setPartialResolutions({});
     setPendingImportData(null);
     setPendingIgnoredSelectors([]);
+    setImportSummaryData(null);
     showToast('Import cancelled.', 'error');
   };
 
@@ -648,7 +693,14 @@ export default function App() {
                   </div>
                 ) : (
                   components.map((block) => (
-                    <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div
+                      key={block.id}
+                      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all ${
+                        newlyAddedIds.has(block.id)
+                          ? 'ring-2 ring-[#008000] ring-offset-1 rounded-xl'
+                          : ''
+                      }`}
+                    >
                       <StandardBlock
                         block={block}
                         onUpdate={handleUpdateComponent}
@@ -776,6 +828,14 @@ export default function App() {
           conflicts={pendingConflicts}
           onComplete={handleConflictComplete}
           onCancel={handleImportCancel}
+        />
+      )}
+
+      {/* Import Diagnostic Summary */}
+      {importSummaryData && (
+        <ImportSummary
+          data={importSummaryData}
+          onClose={() => setImportSummaryData(null)}
         />
       )}
 
