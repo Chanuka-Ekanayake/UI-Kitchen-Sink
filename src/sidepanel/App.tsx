@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { ValidationResult, ComponentBlock, ComponentStandard, Profile } from '../shared/types';
 import { GlobalSummary } from './components/GlobalSummary';
@@ -6,8 +6,9 @@ import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
 import { StandardBlock } from './components/StandardBlock';
 import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
-import { Plus } from 'lucide-react';
+import { Plus, Download, Upload } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
+import { exportProfile, handleImportFile } from './utils/serialization';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
 
@@ -47,6 +48,12 @@ export default function App() {
 
   // ProfileManager ref for triggering rename from App
   const profileManagerRef = useRef<ProfileManagerHandle>(null);
+  // Hidden file input ref for Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -193,6 +200,42 @@ export default function App() {
     updateActiveProfileComponents(comps =>
       comps.map(c => ({ ...c, isEnabled }))
     );
+  };
+
+  // ─── Toast helper ─────────────────────────────────────────────────
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // ─── Import / Export ──────────────────────────────────────────────
+
+  const exportActiveProfile = () => {
+    if (!activeProfile) return;
+    try {
+      exportProfile(activeProfile);
+      showToast(`'${activeProfile.name}' exported successfully.`);
+    } catch (err: any) {
+      showToast(err.message ?? 'Export failed.', 'error');
+    }
+  };
+
+  const importProfile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const { profile } = await handleImportFile(file, 'add-as-new');
+      // Always add as new — never overwrite existing data without explicit user action
+      setProfiles(prev => [...prev, profile]);
+      setActiveProfileId(profile.id);
+      showToast(`'${profile.name}' imported successfully.`);
+    } catch (err: any) {
+      showToast(err.message ?? 'Import failed.', 'error');
+    } finally {
+      setIsImporting(false);
+      // Reset input so the same file can be re-imported if needed
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   // ─── Scan logic ───────────────────────────────────────────────────
@@ -431,7 +474,31 @@ export default function App() {
               </div>
             )}
 
-            <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100">
+            <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100 flex flex-col gap-2">
+              {/* Import / Export row */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Import a profile from a .json file"
+                >
+                  <Upload size={13} />
+                  {isImporting ? 'Importing…' : 'Import'}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportActiveProfile}
+                  disabled={!activeProfile}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Export active profile as JSON"
+                >
+                  <Download size={13} />
+                  Export
+                </button>
+              </div>
+
               <button
                 onClick={handleScan}
                 disabled={isScanDisabled}
@@ -439,6 +506,18 @@ export default function App() {
               >
                 Start Scan{enabledComponents.length > 0 ? ` (${enabledComponents.length})` : ''}
               </button>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importProfile(file);
+                }}
+              />
             </div>
           </div>
         );
@@ -460,6 +539,19 @@ export default function App() {
       <div className="w-full h-full transition-all duration-300 ease-in-out opacity-100 flex flex-col min-h-0">
         {renderContentView()}
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+            toast.type === 'error'
+              ? 'bg-red-600 text-white'
+              : 'bg-[#008000] text-white'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </MainLayout>
   );
 }
