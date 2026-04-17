@@ -11,6 +11,7 @@ import { ImportOptionModal } from './components/ImportOptionModal';
 import { Plus, Download, Upload } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 import { exportProfile, handleImportFile } from './utils/serialization';
+import { handleCssImportFile } from './utils/cssImporter';
 import {
   processImport,
   MergeConflict,
@@ -57,8 +58,10 @@ export default function App() {
 
   // ProfileManager ref for triggering rename from App
   const profileManagerRef = useRef<ProfileManagerHandle>(null);
-  // Hidden file input ref for Import
+  // Hidden file input ref for JSON Import
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hidden file input ref for CSS Import
+  const cssFileInputRef = useRef<HTMLInputElement>(null);
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -73,6 +76,9 @@ export default function App() {
 
   // Import destination choice buffer (cleared when user cancels or commits)
   const [pendingImportData, setPendingImportData] = useState<Profile | null>(null);
+  const [pendingSourceType, setPendingSourceType] = useState<'json' | 'css'>('json');
+  const [pendingCssWarnings, setPendingCssWarnings] = useState<string[]>([]);
+  const [pendingIgnoredSelectors, setPendingIgnoredSelectors] = useState<string[]>([]);
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -241,20 +247,59 @@ export default function App() {
   };
 
   /**
-   * Step 1: Parse the file and buffer it — do NOT write to profiles yet.
-   * The ImportOptionModal will ask the user where the data should go.
+   * Step 1 (JSON): Parse the file and buffer it — do NOT write to profiles yet.
    */
   const importProfile = async (file: File) => {
     setIsImporting(true);
     try {
       const { profile } = await handleImportFile(file, 'add-as-new');
-      // Buffer — wait for the user to choose New or Merge
+      setPendingSourceType('json');
+      setPendingCssWarnings([]);
       setPendingImportData(profile);
     } catch (err: any) {
       showToast(err.message ?? 'Import failed.', 'error');
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  /**
+   * Step 1 (CSS): Parse a CSS file into components and buffer as a draft profile.
+   */
+  const importCssFile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const existingNames = (activeProfile?.components ?? []).map(c => c.name);
+      const { components, ignoredSelectors, overLimitRules, warnings } = await handleCssImportFile(file, existingNames);
+
+      if (components.length === 0) {
+        const ignoreMsg = ignoredSelectors.length > 0
+          ? ` ${ignoredSelectors.length} complex selector(s) were skipped.`
+          : '';
+        showToast(`No valid CSS rules could be extracted from this file.${ignoreMsg}`, 'error');
+        return;
+      }
+
+      const draftName = file.name.replace(/\.css$/i, '').replace(/[_-]/g, ' ').trim() || 'CSS Import';
+      const draftProfile: Profile = {
+        id: crypto.randomUUID?.() ?? Date.now().toString(),
+        name: draftName,
+        components,
+      };
+
+      const allWarnings = [...warnings];
+      if (overLimitRules > 0) allWarnings.push(`${overLimitRules} rules exceeded the ${100}-rule limit and were skipped.`);
+
+      setPendingSourceType('css');
+      setPendingCssWarnings(allWarnings);
+      setPendingIgnoredSelectors(ignoredSelectors);
+      setPendingImportData(draftProfile);
+    } catch (err: any) {
+      showToast(err.message ?? 'CSS import failed.', 'error');
+    } finally {
+      setIsImporting(false);
+      if (cssFileInputRef.current) cssFileInputRef.current.value = '';
     }
   };
 
@@ -271,8 +316,11 @@ export default function App() {
     setProfiles(result.updatedProfiles);
     setActiveProfileId(result.newActiveProfileId);
     const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
-    showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+    showToast(
+      `Import complete: ${addedCount} added, ${skipped} skipped${pendingSourceType === 'css' && pendingIgnoredSelectors.length > 0 ? `, ${pendingIgnoredSelectors.length} complex selectors unsupported` : ''}.${pendingSourceType === 'css' ? ` (${addedCount} CSS rules converted)` : ''}`
+    );
     setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
   };
 
   /** Step 2b — User chose 'Merge into Active Profile' */
@@ -297,15 +345,21 @@ export default function App() {
       setProfiles(result.updatedProfiles);
       setActiveProfileId(result.newActiveProfileId);
       const { addedCount, skippedCount: skipped, conflictsResolved } = result.summary;
-      showToast(`Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved.`);
+      showToast(
+        `Import complete: ${addedCount} added, ${skipped} skipped, ${conflictsResolved} conflicts resolved${pendingSourceType === 'css' && pendingIgnoredSelectors.length > 0 ? `, ${pendingIgnoredSelectors.length} complex selectors skipped` : ''}.`
+      );
     }
     setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
   };
 
   /** Clears the pending buffer without writing anything */
   const handleImportOptionCancel = () => {
     setPendingImportData(null);
+    setPendingCssWarnings([]);
+    setPendingIgnoredSelectors([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cssFileInputRef.current) cssFileInputRef.current.value = '';
   };
 
   /** Called by MergeConflictModal when the user has resolved all pending conflicts */
@@ -334,6 +388,7 @@ export default function App() {
     setImportedProfileCache(null);
     setPartialResolutions({});
     setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
     showToast('Import cancelled.', 'error');
   };
 
@@ -575,7 +630,7 @@ export default function App() {
 
             <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100 flex flex-col gap-2">
               {/* Import / Export row */}
-              <div className="flex gap-2">
+              <div className="flex gap-1.5">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -584,7 +639,17 @@ export default function App() {
                   title="Import a profile from a .json file"
                 >
                   <Upload size={13} />
-                  {isImporting ? 'Importing…' : 'Import'}
+                  {isImporting ? 'Importing…' : 'JSON'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cssFileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Convert a .css file into components"
+                >
+                  <Upload size={13} />
+                  CSS
                 </button>
                 <button
                   type="button"
@@ -606,7 +671,7 @@ export default function App() {
                 Start Scan{enabledComponents.length > 0 ? ` (${enabledComponents.length})` : ''}
               </button>
 
-              {/* Hidden file input */}
+              {/* Hidden JSON file input */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -615,6 +680,17 @@ export default function App() {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) importProfile(file);
+                }}
+              />
+              {/* Hidden CSS file input */}
+              <input
+                ref={cssFileInputRef}
+                type="file"
+                accept=".css,text/css"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importCssFile(file);
                 }}
               />
             </div>
@@ -644,6 +720,9 @@ export default function App() {
         <ImportOptionModal
           importedProfile={pendingImportData}
           activeProfileName={activeProfile?.name ?? null}
+          sourceType={pendingSourceType}
+          cssWarnings={pendingCssWarnings}
+          ignoredSelectors={pendingIgnoredSelectors}
           onSelectNew={handleImportChooseNew}
           onSelectMerge={handleImportChooseMerge}
           onCancel={handleImportOptionCancel}
