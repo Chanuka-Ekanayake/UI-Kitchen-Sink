@@ -142,9 +142,9 @@ export function ImportOptionModal({
             >
               <FilePlus2 size={18} className="text-[#008000] mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
               <div>
-                <p className="text-sm font-semibold text-gray-800">Create New Profile</p>
+                <p className="text-sm font-semibold text-gray-800">Import as New Profile</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-snug">
-                  Add as a standalone profile. A unique name will be assigned if needed.
+                  Creates a standalone profile containing only this import's components. A unique name will be assigned if needed.
                 </p>
               </div>
             </button>
@@ -159,11 +159,11 @@ export function ImportOptionModal({
               <div>
                 <p className="text-sm font-semibold text-gray-800">Merge into Active Profile</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-snug">
-                  Append components into{' '}
-                  <span className="font-medium text-blue-600 truncate">
-                    {activeProfileName ?? 'No active profile'}
+                  Appends rules to your current view —{' '}
+                  <span className="font-medium text-blue-600">
+                    {activeProfileName ?? 'no profile selected'}
                   </span>
-                  . Conflicts will be resolved interactively.
+                  . Duplicates are skipped; selector conflicts are resolved interactively.
                 </p>
               </div>
             </button>
