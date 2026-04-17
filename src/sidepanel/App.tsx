@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { ValidationResult, ComponentBlock, ComponentStandard, Profile } from '../shared/types';
 import { GlobalSummary } from './components/GlobalSummary';
@@ -6,8 +6,20 @@ import { ResultCard } from './components/ResultCard';
 import { MainLayout } from './components/MainLayout';
 import { StandardBlock } from './components/StandardBlock';
 import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
-import { Plus } from 'lucide-react';
+import { MergeConflictModal } from './components/MergeConflictModal';
+import { ImportOptionModal } from './components/ImportOptionModal';
+import { ImportSummary, ImportSummaryData } from './components/ImportSummary';
+import { Plus, Download, Upload, FileText } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
+import { exportProfile, handleImportFile } from './utils/serialization';
+import { handleCssImportFile } from './utils/cssImporter';
+import {
+  processImport,
+  MergeConflict,
+  MergeResolution,
+  MergeMode,
+  generateUniqueName,
+} from './utils/mergeEngine';
 
 type ViewState = 'HOME' | 'SCANNING' | 'RESULTS' | 'ERROR';
 
@@ -47,6 +59,36 @@ export default function App() {
 
   // ProfileManager ref for triggering rename from App
   const profileManagerRef = useRef<ProfileManagerHandle>(null);
+  // Hidden file input ref for JSON Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hidden file input ref for CSS Import
+  const cssFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
+
+  // Timestamp of the most recent scan (used in PDF reports)
+  const scannedAtRef = useRef<Date>(new Date());
+
+  // Merge conflict state
+  const [pendingConflicts, setPendingConflicts] = useState<MergeConflict[]>([]);
+  const [importedProfileCache, setImportedProfileCache] = useState<Profile | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
+  const [mergeMode, setMergeMode] = useState<MergeMode>('NEW');
+  const [partialResolutions, setPartialResolutions] = useState<Record<string, MergeResolution>>({});
+
+  // Import destination choice buffer (cleared when user cancels or commits)
+  const [pendingImportData, setPendingImportData] = useState<Profile | null>(null);
+  const [pendingSourceType, setPendingSourceType] = useState<'json' | 'css'>('json');
+  const [pendingCssWarnings, setPendingCssWarnings] = useState<string[]>([]);
+  const [pendingIgnoredSelectors, setPendingIgnoredSelectors] = useState<string[]>([]);
+
+  // Post-import diagnostic summary
+  const [importSummaryData, setImportSummaryData] = useState<ImportSummaryData | null>(null);
+  // IDs of components just merged in — used to flash-highlight them
+  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
 
   // ─── Derived state ────────────────────────────────────────────────
 
@@ -195,6 +237,210 @@ export default function App() {
     );
   };
 
+  // ─── Toast helper ─────────────────────────────────────────────────
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // ─── Import / Export ──────────────────────────────────────────────
+
+  const exportActiveProfile = () => {
+    if (!activeProfile) return;
+    try {
+      exportProfile(activeProfile);
+      showToast(`'${activeProfile.name}' exported successfully.`);
+    } catch (err: any) {
+      showToast(err.message ?? 'Export failed.', 'error');
+    }
+  };
+
+  /**
+   * Step 1 (JSON): Parse the file and buffer it — do NOT write to profiles yet.
+   */
+  const importProfile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const { profile } = await handleImportFile(file, 'add-as-new');
+      setPendingSourceType('json');
+      setPendingCssWarnings([]);
+      setPendingImportData(profile);
+    } catch (err: any) {
+      showToast(err.message ?? 'Import failed.', 'error');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  /**
+   * Step 1 (CSS): Parse a CSS file into components and buffer as a draft profile.
+   */
+  const importCssFile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const existingNames = (activeProfile?.components ?? []).map(c => c.name);
+      const { components, ignoredSelectors, overLimitRules, warnings } = await handleCssImportFile(file, existingNames);
+
+      if (components.length === 0) {
+        const ignoreMsg = ignoredSelectors.length > 0
+          ? ` ${ignoredSelectors.length} complex selector(s) were skipped.`
+          : '';
+        showToast(`No valid CSS rules could be extracted from this file.${ignoreMsg}`, 'error');
+        return;
+      }
+
+      const draftName = file.name.replace(/\.css$/i, '').replace(/[_-]/g, ' ').trim() || 'CSS Import';
+      const draftProfile: Profile = {
+        id: crypto.randomUUID?.() ?? Date.now().toString(),
+        name: draftName,
+        components,
+      };
+
+      const allWarnings = [...warnings];
+      if (overLimitRules > 0) allWarnings.push(`${overLimitRules} rules exceeded the ${100}-rule limit and were skipped.`);
+
+      setPendingSourceType('css');
+      setPendingCssWarnings(allWarnings);
+      setPendingIgnoredSelectors(ignoredSelectors);
+      setPendingImportData(draftProfile);
+    } catch (err: any) {
+      showToast(err.message ?? 'CSS import failed.', 'error');
+    } finally {
+      setIsImporting(false);
+      if (cssFileInputRef.current) cssFileInputRef.current.value = '';
+    }
+  };
+
+  /** Step 2a — User chose 'Import as New Profile' */
+  const handleImportChooseNew = () => {
+    if (!pendingImportData) return;
+    const result = processImport({
+      importedProfile: pendingImportData,
+      existingProfiles: profiles,
+      targetProfileId: null,
+      mode: 'NEW',
+      resolutions: {},
+    });
+    setProfiles(result.updatedProfiles);
+    setActiveProfileId(result.newActiveProfileId);
+    const { addedCount, skippedCount, conflictsResolved } = result.summary;
+    // Show the diagnostic modal instead of a toast
+    const newProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+    setImportSummaryData({
+      mode: 'new',
+      targetProfileName: newProfile?.name ?? pendingImportData.name,
+      addedCount,
+      skippedCount,
+      conflictsResolved,
+      ignoredSelectors: pendingIgnoredSelectors,
+      isCss: pendingSourceType === 'css',
+    });
+    setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
+  };
+
+  /** Step 2b — User chose 'Merge into Active Profile' */
+  const handleImportChooseMerge = () => {
+    if (!pendingImportData) return;
+    const result = processImport({
+      importedProfile: pendingImportData,
+      existingProfiles: profiles,
+      targetProfileId: activeProfileId,
+      mode: 'APPEND',
+      resolutions: {},
+    });
+
+    if (result.pendingConflicts.length > 0) {
+      // Stash and open conflict modal
+      setImportedProfileCache(pendingImportData);
+      setMergeTargetId(activeProfileId);
+      setMergeMode('APPEND');
+      setPartialResolutions({});
+      setPendingConflicts(result.pendingConflicts);
+    } else {
+      setProfiles(result.updatedProfiles);
+      setActiveProfileId(result.newActiveProfileId);
+      const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
+      // Flash-highlight the newly added component IDs
+      const targetBefore = profiles.find(p => p.id === activeProfileId);
+      const beforeIds = new Set(targetBefore?.components.map(c => c.id) ?? []);
+      const addedIds = new Set(finalComponents.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+      setNewlyAddedIds(addedIds);
+      setTimeout(() => setNewlyAddedIds(new Set()), 2500);
+      // Show diagnostic modal
+      const targetProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+      setImportSummaryData({
+        mode: 'merge',
+        targetProfileName: targetProfile?.name ?? 'Active Profile',
+        addedCount,
+        skippedCount,
+        conflictsResolved,
+        ignoredSelectors: pendingIgnoredSelectors,
+        isCss: pendingSourceType === 'css',
+      });
+    }
+    setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
+  };
+
+  /** Clears the pending buffer without writing anything */
+  const handleImportOptionCancel = () => {
+    setPendingImportData(null);
+    setPendingCssWarnings([]);
+    setPendingIgnoredSelectors([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cssFileInputRef.current) cssFileInputRef.current.value = '';
+  };
+
+  /** Called by MergeConflictModal when the user has resolved all pending conflicts */
+  const handleConflictComplete = (resolutions: Record<string, MergeResolution>) => {
+    if (!importedProfileCache) return;
+    const allResolutions = { ...partialResolutions, ...resolutions };
+    const result = processImport({
+      importedProfile: importedProfileCache,
+      existingProfiles: profiles,
+      targetProfileId: mergeTargetId,
+      mode: mergeMode,
+      resolutions: allResolutions,
+    });
+    setProfiles(result.updatedProfiles);
+    setActiveProfileId(result.newActiveProfileId);
+    const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
+    // Flash-highlight newly added components
+    const targetBefore = profiles.find(p => p.id === mergeTargetId);
+    const beforeIds = new Set(targetBefore?.components.map(c => c.id) ?? []);
+    const addedIds = new Set(finalComponents.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+    setNewlyAddedIds(addedIds);
+    setTimeout(() => setNewlyAddedIds(new Set()), 2500);
+    // Show diagnostic modal
+    const targetProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+    setImportSummaryData({
+      mode: 'merge',
+      targetProfileName: targetProfile?.name ?? 'Active Profile',
+      addedCount,
+      skippedCount,
+      conflictsResolved,
+      ignoredSelectors: pendingIgnoredSelectors,
+      isCss: pendingSourceType === 'css',
+    });
+    // Clear conflict state
+    setPendingConflicts([]);
+    setImportedProfileCache(null);
+    setPartialResolutions({});
+  };
+
+  const handleImportCancel = () => {
+    setPendingConflicts([]);
+    setImportedProfileCache(null);
+    setPartialResolutions({});
+    setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
+    setImportSummaryData(null);
+    showToast('Import cancelled.', 'error');
+  };
+
   // ─── Scan logic ───────────────────────────────────────────────────
 
   const enabledComponents = components.filter(c => c.isEnabled);
@@ -209,6 +455,31 @@ export default function App() {
     setResults(null);
     setError(null);
     setCurrentView('HOME');
+  };
+
+  const exportToPdf = async () => {
+    if (!results || results.length === 0) return;
+    setIsPdfExporting(true);
+    try {
+      let pageUrl = 'Unknown';
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        pageUrl = tabs[0]?.url ?? 'Unknown';
+      } catch { /* non-critical */ }
+
+      // Lazy-load so jspdf is code-split from the main bundle
+      const { generateAuditPdf } = await import('./utils/pdfGenerator');
+      await generateAuditPdf({
+        results,
+        profileName: activeProfile?.name ?? 'Unknown Profile',
+        pageUrl,
+        scannedAt: scannedAtRef.current,
+      });
+    } catch (err: any) {
+      showToast(err.message ?? 'PDF export failed.', 'error');
+    } finally {
+      setIsPdfExporting(false);
+    }
   };
 
   const handleScan = async () => {
@@ -322,6 +593,7 @@ export default function App() {
       if (!response) throw new Error(lastError?.message || 'Receiving end does not exist after 3 attempts.');
 
       setResults(response);
+      scannedAtRef.current = new Date();
       setCurrentView('RESULTS');
     } catch (err) {
       console.error('Scan error:', err);
@@ -369,10 +641,21 @@ export default function App() {
                 <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
               ))}
             </div>
-            <div className="shrink-0 w-full mt-auto pt-2">
+            <div className="shrink-0 w-full mt-auto pt-2 flex gap-2">
+              {/* Export PDF */}
+              <button
+                onClick={exportToPdf}
+                disabled={isPdfExporting || !results || results.length === 0}
+                className="flex items-center justify-center gap-1.5 flex-1 py-2.5 text-sm font-medium text-white bg-[#008000] hover:bg-[#006000] disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-all shadow-sm active:scale-95"
+                title="Export audit results as PDF"
+              >
+                <FileText size={14} />
+                {isPdfExporting ? 'Generating…' : 'Export PDF'}
+              </button>
+              {/* Clear */}
               <button
                 onClick={clearResults}
-                className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
+                className="flex items-center justify-center flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-all shadow-sm"
               >
                 Clear Results
               </button>
@@ -410,7 +693,14 @@ export default function App() {
                   </div>
                 ) : (
                   components.map((block) => (
-                    <div key={block.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div
+                      key={block.id}
+                      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all ${
+                        newlyAddedIds.has(block.id)
+                          ? 'ring-2 ring-[#008000] ring-offset-1 rounded-xl'
+                          : ''
+                      }`}
+                    >
                       <StandardBlock
                         block={block}
                         onUpdate={handleUpdateComponent}
@@ -431,7 +721,41 @@ export default function App() {
               </div>
             )}
 
-            <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100">
+            <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100 flex flex-col gap-2">
+              {/* Import / Export row */}
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Import a profile from a .json file"
+                >
+                  <Upload size={13} />
+                  {isImporting ? 'Importing…' : 'JSON'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cssFileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Convert a .css file into components"
+                >
+                  <Upload size={13} />
+                  CSS
+                </button>
+                <button
+                  type="button"
+                  onClick={exportActiveProfile}
+                  disabled={!activeProfile}
+                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="Export active profile as JSON"
+                >
+                  <Download size={13} />
+                  Export
+                </button>
+              </div>
+
               <button
                 onClick={handleScan}
                 disabled={isScanDisabled}
@@ -439,6 +763,29 @@ export default function App() {
               >
                 Start Scan{enabledComponents.length > 0 ? ` (${enabledComponents.length})` : ''}
               </button>
+
+              {/* Hidden JSON file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importProfile(file);
+                }}
+              />
+              {/* Hidden CSS file input */}
+              <input
+                ref={cssFileInputRef}
+                type="file"
+                accept=".css,text/css"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importCssFile(file);
+                }}
+              />
             </div>
           </div>
         );
@@ -460,6 +807,50 @@ export default function App() {
       <div className="w-full h-full transition-all duration-300 ease-in-out opacity-100 flex flex-col min-h-0">
         {renderContentView()}
       </div>
+
+      {/* Import Destination Choice Modal */}
+      {pendingImportData && !pendingConflicts.length && (
+        <ImportOptionModal
+          importedProfile={pendingImportData}
+          activeProfileName={activeProfile?.name ?? null}
+          sourceType={pendingSourceType}
+          cssWarnings={pendingCssWarnings}
+          ignoredSelectors={pendingIgnoredSelectors}
+          onSelectNew={handleImportChooseNew}
+          onSelectMerge={handleImportChooseMerge}
+          onCancel={handleImportOptionCancel}
+        />
+      )}
+
+      {/* Merge Conflict Modal */}
+      {pendingConflicts.length > 0 && (
+        <MergeConflictModal
+          conflicts={pendingConflicts}
+          onComplete={handleConflictComplete}
+          onCancel={handleImportCancel}
+        />
+      )}
+
+      {/* Import Diagnostic Summary */}
+      {importSummaryData && (
+        <ImportSummary
+          data={importSummaryData}
+          onClose={() => setImportSummaryData(null)}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+            toast.type === 'error'
+              ? 'bg-red-600 text-white'
+              : 'bg-[#008000] text-white'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </MainLayout>
   );
 }
