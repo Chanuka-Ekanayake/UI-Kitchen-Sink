@@ -8,7 +8,7 @@ import { StandardBlock } from './components/StandardBlock';
 import { ProfileManager, ProfileManagerHandle } from './components/ProfileManager';
 import { MergeConflictModal } from './components/MergeConflictModal';
 import { ImportOptionModal } from './components/ImportOptionModal';
-import { Plus, Download, Upload } from 'lucide-react';
+import { Plus, Download, Upload, FileText } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 import { exportProfile, handleImportFile } from './utils/serialization';
 import { handleCssImportFile } from './utils/cssImporter';
@@ -66,6 +66,10 @@ export default function App() {
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
+
+  // Timestamp of the most recent scan (used in PDF reports)
+  const scannedAtRef = useRef<Date>(new Date());
 
   // Merge conflict state
   const [pendingConflicts, setPendingConflicts] = useState<MergeConflict[]>([]);
@@ -408,6 +412,31 @@ export default function App() {
     setCurrentView('HOME');
   };
 
+  const exportToPdf = async () => {
+    if (!results || results.length === 0) return;
+    setIsPdfExporting(true);
+    try {
+      let pageUrl = 'Unknown';
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        pageUrl = tabs[0]?.url ?? 'Unknown';
+      } catch { /* non-critical */ }
+
+      // Lazy-load so jspdf is code-split from the main bundle
+      const { generateAuditPdf } = await import('./utils/pdfGenerator');
+      await generateAuditPdf({
+        results,
+        profileName: activeProfile?.name ?? 'Unknown Profile',
+        pageUrl,
+        scannedAt: scannedAtRef.current,
+      });
+    } catch (err: any) {
+      showToast(err.message ?? 'PDF export failed.', 'error');
+    } finally {
+      setIsPdfExporting(false);
+    }
+  };
+
   const handleScan = async () => {
     try {
       setCurrentView('SCANNING');
@@ -519,6 +548,7 @@ export default function App() {
       if (!response) throw new Error(lastError?.message || 'Receiving end does not exist after 3 attempts.');
 
       setResults(response);
+      scannedAtRef.current = new Date();
       setCurrentView('RESULTS');
     } catch (err) {
       console.error('Scan error:', err);
@@ -566,10 +596,21 @@ export default function App() {
                 <ResultCard key={`${result.elementSelector}-${idx}`} result={result} />
               ))}
             </div>
-            <div className="shrink-0 w-full mt-auto pt-2">
+            <div className="shrink-0 w-full mt-auto pt-2 flex gap-2">
+              {/* Export PDF */}
+              <button
+                onClick={exportToPdf}
+                disabled={isPdfExporting || !results || results.length === 0}
+                className="flex items-center justify-center gap-1.5 flex-1 py-2.5 text-sm font-medium text-white bg-[#008000] hover:bg-[#006000] disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-all shadow-sm active:scale-95"
+                title="Export audit results as PDF"
+              >
+                <FileText size={14} />
+                {isPdfExporting ? 'Generating…' : 'Export PDF'}
+              </button>
+              {/* Clear */}
               <button
                 onClick={clearResults}
-                className="text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-100 font-medium py-2 px-6 rounded-md transition-all shadow-sm w-full text-sm"
+                className="flex items-center justify-center flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-all shadow-sm"
               >
                 Clear Results
               </button>
