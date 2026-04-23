@@ -60,6 +60,7 @@ export type ScannerMessage =
   | { action: 'HIGHLIGHT_ELEMENT'; payload: { selector: string; isPassed: boolean; state?: string } }
   | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string; isPassed: boolean; state?: string } }
   | { action: 'RELAY_CLEAR' }
-  | { action: 'CLEAR_HIGHLIGHT' };
+  | { action: 'CLEAR_HIGHLIGHT' }
+  | { action: 'HARVEST_PAGE' };
 
 export type AppMode = 'DEV' | 'NORMAL';
