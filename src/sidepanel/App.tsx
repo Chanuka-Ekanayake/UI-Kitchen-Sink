@@ -581,6 +581,41 @@ export default function App() {
     showToast('Import cancelled.', 'error');
   };
 
+  const handleLiveScrapeCommit = (harvestedComponents: ComponentBlock[]) => {
+    if (!activeProfileId) return;
+
+    // Use a synthetic profile for the generic merge engine pipeline, exactly like RemoteSync
+    const syntheticProfile: Profile = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      name: 'Live Scrape Harvest',
+      components: harvestedComponents,
+    };
+
+    setPendingSourceType('json');
+    setImportSummaryData(null);
+    setPendingIgnoredSelectors([]);
+
+    const result = processImport({
+      importedProfile: syntheticProfile,
+      existingProfiles: profiles,
+      targetProfileId: activeProfileId,
+      mode: 'APPEND', // We just force it directly in.
+      resolutions: {}, 
+    });
+
+    setProfiles(result.updatedProfiles);
+    setActiveProfileId(result.newActiveProfileId);
+
+    // Flash-highlight newly added
+    const targetBefore = profiles.find(p => p.id === activeProfileId);
+    const beforeIds = new Set(targetBefore?.components.map(c => c.id) ?? []);
+    const addedIds = new Set(result.summary.finalComponents.filter(c => !beforeIds.has(c.id)).map(c => c.id));
+    setNewlyAddedIds(addedIds);
+    setTimeout(() => setNewlyAddedIds(new Set()), 2500);
+
+    showToast(`Successfully added ${result.summary.addedCount} components from DOM!`);
+  };
+
   // ─── Scan logic ───────────────────────────────────────────────────
 
   const enabledComponents = components.filter(c => c.isEnabled);
@@ -859,7 +894,7 @@ export default function App() {
                 ) : (
                   <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
                     <RemoteSyncPanel activeProfile={activeProfile} onSync={handleRemoteSync} />
-                    <LiveScrapePanel />
+                    <LiveScrapePanel onCommit={handleLiveScrapeCommit} />
                   </div>
                 )}
               </div>
