@@ -7,6 +7,20 @@ export class AuthError extends Error {
   }
 }
 
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 /**
  * Extracts JSON blocks following a specific tag. 
  * Robustly parses nested braces by ignoring characters inside string literals.
@@ -74,10 +88,10 @@ export async function syncRemoteComponents(url: string): Promise<{ components: C
   }
 
   // --- Auth-Gate Simulation ---
-  if (url === 'http://localhost:5173/style-guide-auth.md' || url.includes('/style-guide-auth.md')) {
+  if (url === 'http://localhost:5173/auth-test-guide.md' || url.includes('/auth-test-guide.md')) {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      const data = await chrome.storage.local.get(['mock_auth_success']);
-      if (!data.mock_auth_success) {
+      const data = await chrome.storage.local.get(['mock_auth_active']);
+      if (!data.mock_auth_active) {
         throw new AuthError(`Authentication Required: Please open this URL in a new tab to log in and then try again.`);
       }
     } else {
@@ -86,14 +100,24 @@ export async function syncRemoteComponents(url: string): Promise<{ components: C
   }
   // -----------------------------
 
-  const response = await fetch(url);
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (err: any) {
+    // If fetch itself throws, it's typically CORS or a complete network failure
+    throw new NetworkError(`Network or CORS issue. You may need to grant Host Permissions for this domain.`);
+  }
 
   if (response.status === 401 || response.status === 403) {
     throw new AuthError(`Authentication Required: Please open this URL in a new tab to log in and then try again.`);
   }
 
+  if (response.status === 404) {
+    throw new NotFoundError(`Style Guide not found at the provided URL.`);
+  }
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch from remote URL: ${response.status} ${response.statusText}`);
+    throw new NetworkError(`Failed to fetch from remote URL: ${response.status} ${response.statusText}`);
   }
 
   const text = await response.text();

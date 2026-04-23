@@ -10,9 +10,9 @@ interface RemoteSyncPanelProps {
 
 export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps) {
   const [url, setUrl] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [errorData, setErrorData] = useState<{ message: string, isAuthError: boolean } | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
+  const [syncState, setSyncState] = useState<'IDLE' | 'SYNCING' | 'AUTH_REQUIRED' | 'ERROR' | 'SUCCESS'>('IDLE');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [hasOpenedLoginTab, setHasOpenedLoginTab] = useState(false);
 
   // Sync internal UI URL with activeProfile if it changes
   useEffect(() => {
@@ -21,8 +21,9 @@ export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps)
     } else {
       setUrl('');
     }
-    setErrorData(null);
-    setAuthResolved(false);
+    setSyncState('IDLE');
+    setErrorMessage('');
+    setHasOpenedLoginTab(false);
   }, [activeProfile?.sourceUrl]);
 
   // Listen to storage changes to Auto-Refresh auth errors for simulation
@@ -30,30 +31,45 @@ export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps)
     if (typeof chrome === 'undefined' || !chrome.storage) return;
 
     const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
-      if (changes.mock_auth_success && changes.mock_auth_success.newValue === true) {
-        setErrorData(null);
-        setAuthResolved(true);
+      if (changes.mock_auth_active && changes.mock_auth_active.newValue === true) {
+        if (syncState === 'AUTH_REQUIRED') {
+          // Keep it simple: Reset to IDLE so the user can easily "Check Access Now" / "Retry Sync"
+          setSyncState('IDLE');
+          setErrorMessage('');
+        }
       }
     };
     chrome.storage.onChanged.addListener(listener);
     return () => chrome.storage.onChanged.removeListener(listener);
-  }, []);
+  }, [syncState]);
 
   const handleSync = async () => {
     if (!url || !activeProfile) return;
-    setIsSyncing(true);
-    setErrorData(null);
+    setSyncState('SYNCING');
+    setErrorMessage('');
     try {
       await onSync(url);
-      setAuthResolved(false); // Clear the retry state on success
+      setSyncState('SUCCESS');
+      setHasOpenedLoginTab(false);
+      setTimeout(() => setSyncState('IDLE'), 2000);
     } catch (err: any) {
-      const isAuthError = err.name === 'AuthError' || err instanceof AuthError;
-      const message = isAuthError 
-        ? 'Access Denied: This Style Guide requires authentication.' 
-        : (err.message ?? 'Unknown error occurred.');
-      setErrorData({ message, isAuthError });
-    } finally {
-      setIsSyncing(false);
+      if (err.name === 'AuthError' || err instanceof AuthError) {
+        setSyncState('AUTH_REQUIRED');
+        setErrorMessage('Authentication Required. Please log in to view this document.');
+      } else {
+        setSyncState('ERROR');
+        setErrorMessage(err.message ?? 'Unknown error occurred.');
+      }
+    }
+  };
+
+  const handleOpenLoginTab = () => {
+    setHasOpenedLoginTab(true);
+    const targetUrl = url.includes('localhost') ? 'http://localhost:5173/mock-login.html' : url;
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.create({ url: targetUrl });
+    } else {
+      window.open(targetUrl, '_blank');
     }
   };
 
@@ -88,28 +104,35 @@ export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps)
             placeholder="https://example.com/design-system"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            disabled={!activeProfile || isSyncing}
+            disabled={!activeProfile || syncState === 'SYNCING'}
             className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#008000]/50 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-400 font-mono"
           />
         </div>
       </div>
 
-      {errorData && (
+      {(syncState === 'ERROR' || syncState === 'AUTH_REQUIRED') && (
         <div className="flex flex-col gap-2 p-3 mt-1 text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-start gap-2">
             <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
-            <p className="font-medium leading-relaxed">{errorData.message}</p>
+            <p className="font-medium leading-relaxed">{errorMessage}</p>
           </div>
-          {errorData.isAuthError && (
-            <a 
-              href={url.includes('localhost') ? 'http://localhost:5173/mock-login.html' : url} 
-              target="_blank" 
-              rel="noopener noreferrer"
+          {syncState === 'AUTH_REQUIRED' && !hasOpenedLoginTab && (
+            <button 
+              onClick={handleOpenLoginTab}
               className="flex items-center justify-center gap-1.5 py-1.5 px-3 ml-5 w-fit font-semibold text-white bg-red-500 hover:bg-red-600 rounded shadow-sm transition-colors cursor-pointer"
             >
               <ExternalLink size={12} />
-              Open Login Page
-            </a>
+              Open Login Tab
+            </button>
+          )}
+          {syncState === 'AUTH_REQUIRED' && hasOpenedLoginTab && (
+            <button 
+              onClick={handleSync}
+              className="flex items-center justify-center gap-1.5 py-1.5 px-3 ml-5 w-fit font-semibold text-[#008000] bg-[#008000]/10 hover:bg-[#008000]/20 border border-[#008000]/20 rounded shadow-sm transition-colors cursor-pointer"
+            >
+              <RefreshCcw size={12} />
+              Check Access Now
+            </button>
           )}
         </div>
       )}
@@ -118,8 +141,10 @@ export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps)
         <div className="flex flex-col">
           <div className="text-[10px] font-semibold text-gray-400 uppercase">Status</div>
           <div className="text-[11px] font-medium text-gray-600 flex items-center gap-1.5">
-            {isSyncing ? (
+            {syncState === 'SYNCING' ? (
               <><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> Syncing...</>
+            ) : syncState === 'SUCCESS' ? (
+              <><span className="w-1.5 h-1.5 rounded-full bg-[#008000]"></span> Sync Complete ✓</>
             ) : isConnected && !hasUnsavedUrlChange ? (
               <><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Synced: <span className="font-normal text-gray-500 break-words">{formattedDate}</span></>
             ) : hasUnsavedUrlChange ? (
@@ -132,15 +157,15 @@ export function RemoteSyncPanel({ activeProfile, onSync }: RemoteSyncPanelProps)
         <button
           onClick={handleSync}
           className="flex items-center justify-center gap-1.5 py-2 px-4 shrink-0 text-xs font-medium text-white bg-[#008000] hover:bg-[#006000] rounded-lg transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={!url || !activeProfile || isSyncing}
+          disabled={!url || !activeProfile || syncState === 'SYNCING' || syncState === 'SUCCESS'}
         >
-          <RefreshCcw size={13} className={isSyncing ? "animate-spin" : ""} />
-          {authResolved ? 'Retry Sync' : (showRefresh ? 'Refresh' : 'Connect & Sync')}
+          <RefreshCcw size={13} className={syncState === 'SYNCING' ? "animate-spin" : ""} />
+          {hasOpenedLoginTab && syncState === 'IDLE' ? 'Retry Sync' : (showRefresh ? 'Refresh' : 'Connect & Sync')}
         </button>
       </div>
 
       <button 
-        onClick={() => chrome?.storage?.local?.remove('mock_auth_success')}
+        onClick={() => chrome?.storage?.local?.remove('mock_auth_active')}
         className="text-[9px] text-gray-400 hover:text-gray-600 underline self-end"
       >
         Reset Auth (Dev)
