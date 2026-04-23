@@ -13,7 +13,7 @@ export function Header({ title }: HeaderProps) {
           <Target size={18} className="text-[#008000]" />
         </div>
         <h1 className="font-bold text-gray-800 text-[13px] tracking-wide flex items-center">
-          UI Kitchen Sink  <span className="text-[#008000] font-bold ml-1">UI Validator</span>
+          Universal  <span className="text-[#008000] font-bold ml-1">UI Validator</span>
           {title && (
             <>
               <ChevronRight size={14} className="text-slate-400 mx-1.5 shrink-0" />

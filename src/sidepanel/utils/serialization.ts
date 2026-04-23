@@ -86,12 +86,12 @@ function validateImportedData(data: any): ExportedProfile {
       isEnabled: c.isEnabled ?? true,
       styleRules: Array.isArray(c.styleRules)
         ? c.styleRules.map((r: any) => ({
-            id: r.id ?? crypto.randomUUID?.() ?? Date.now().toString(),
-            property: r.property ?? '',
-            value: r.value ?? r.expectedValue ?? '',
-            severity: r.severity ?? 'error',
-            state: r.state ?? 'default',
-          }))
+          id: r.id ?? crypto.randomUUID?.() ?? Date.now().toString(),
+          property: r.property ?? '',
+          value: r.value ?? r.expectedValue ?? '',
+          severity: r.severity ?? 'error',
+          state: r.state ?? 'default',
+        }))
         : [],
     };
   });
@@ -204,7 +204,6 @@ export function handleImportFile(
  * Currently logs the incoming data and returns it unchanged.
  */
 export function initiateMerge(importedProfile: Profile): Profile {
-  console.log('[Serialization] initiateMerge called with:', importedProfile);
   // TODO: implement conflict-resolution UI in ST-6.1.B
   return importedProfile;
 }

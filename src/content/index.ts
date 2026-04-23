@@ -2,8 +2,6 @@ import { ValidationResult, PropertyResult, ScannerMessage, ComponentStandard } f
 import { isStyleMatch } from '../shared/normalizer';
 
 (window as any).__UI_VALIDATOR_LOADED__ = true;
-console.log('[UI Validator] Content Script Loaded');
-console.log('[UI Validator] Page:', window.location.href);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -326,10 +324,8 @@ function runAudit(standards: ComponentStandard[], debug = false): ValidationResu
   }
 
   const elapsed = (performance.now() - startTime).toFixed(2);
-  console.log(`[UI Scanner] Audit complete in ${elapsed}ms — ${evaluationResults.length} element(s) evaluated.`);
 
   if (debug && debugEntries.length > 0) {
-    console.log('[UI Scanner] Debug — CSSOM Matches:');
     console.table(debugEntries);
   }
 
@@ -466,12 +462,10 @@ chrome.runtime.onMessage.addListener(
   (request: ScannerMessage, sender, sendResponse) => {
     switch (request.action) {
       case 'PING':
-        console.log('[Content Script] Handshake Received.');
         sendResponse('PONG');
         return true;
 
       case 'START_SCAN':
-        console.log('[UI Scanner] Received START_SCAN — initiating audit…');
         const auditFindings = runAudit(request.standards, request.debug ?? false);
         sendResponse(auditFindings);
         return true;
