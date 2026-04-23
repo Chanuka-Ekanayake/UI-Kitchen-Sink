@@ -1,5 +1,6 @@
 import { ValidationResult, PropertyResult, ScannerMessage, ComponentStandard } from '../shared/types';
 import { isStyleMatch } from '../shared/normalizer';
+import { harvestActivePage } from './harvester';
 
 (window as any).__UI_VALIDATOR_LOADED__ = true;
 
@@ -483,9 +484,21 @@ chrome.runtime.onMessage.addListener(
         overlayManager.hide();
         sendResponse({ status: 'received' });
         break;
+
+      case 'HARVEST_PAGE':
+        const harvested = harvestActivePage();
+        sendResponse({ components: harvested });
+        return true;
     }
   }
 );
 
 export { };
 
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'MOCK_LOGIN_ACTIVE') {
+    if (chrome?.storage?.local) {
+      chrome.storage.local.set({ mock_auth_active: true });
+    }
+  }
+});

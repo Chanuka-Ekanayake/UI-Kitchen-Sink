@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Harvester Test Page</title>
+    <style>
+        .branded-button { background-color: #007bff; color: white; padding: 10px 20px; border-radius: 8px; }
+        #hero-title { font-size: 48px; color: #333; font-family: sans-serif; }
+        .card-container { border: 1px solid #ddd; padding: 20px; margin: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
+        .hidden-text { display: none; }
+    </style>
+</head>
+<body>
+    <button class="branded-button">Click Me</button>
+
+    <h1 id="hero-title">Welcome to the Test</h1>
+
+    <div class="card-container">
+        This is a styled container that should be recorded.
+    </div>
+
+    <div>
+        I am a structural div. I should be ignored by the harvester.
+    </div>
+
+    <p>This is a paragraph with a <span>generic span</span> inside.</p>
+
+    <a href="#" class="nav-link">Home Link</a>
+</body>
+</html>
