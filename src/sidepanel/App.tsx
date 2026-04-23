@@ -270,6 +270,7 @@ export default function App() {
 
     if (errors.length > 0) {
       console.warn(`Scraped ${fetchedComponents.length} components, but encountered ${errors.length} malformed blocks.`);
+      showToast('Sync partially failed: Some components in this HTML view are improperly formatted.', 'error');
     }
     
     if (fetchedComponents.length === 0 && errors.length === 0) {
