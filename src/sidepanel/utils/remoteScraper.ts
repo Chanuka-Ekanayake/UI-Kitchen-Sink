@@ -22,6 +22,25 @@ export class NetworkError extends Error {
 }
 
 /**
+ * Sanitizes scraped content by stripping HTML tags, restoring HTML entities, and cleaning whitespace.
+ */
+export function sanitizeScrapedContent(rawContent: string): string {
+  // Strip all HTML layout tags
+  let cleaned = rawContent.replace(/<[^>]*>?/gm, '');
+  
+  // Unescape common HTML entities
+  cleaned = cleaned.replace(/&quot;/g, '"')
+                   .replace(/&apos;/g, "'")
+                   .replace(/&lt;/g, '<')
+                   .replace(/&gt;/g, '>')
+                   .replace(/&amp;/g, '&');
+                   
+  // Remove formatting line breaks
+  cleaned = cleaned.replace(/[\r\n]+/g, '').trim();
+  return cleaned;
+}
+
+/**
  * Extracts JSON blocks following a specific tag. 
  * Robustly parses nested braces by ignoring characters inside string literals.
  */
@@ -120,10 +139,11 @@ export async function syncRemoteComponents(url: string): Promise<{ components: C
     throw new NetworkError(`Failed to fetch from remote URL: ${response.status} ${response.statusText}`);
   }
 
-  const text = await response.text();
+  const rawText = await response.text();
+  const sanitizedText = sanitizeScrapedContent(rawText);
   const dataTag = '!!UI-VAL-DATA!!';
   
-  const jsonBlocks = extractJsonBlocks(text, dataTag);
+  const jsonBlocks = extractJsonBlocks(sanitizedText, dataTag);
   const components: ComponentBlock[] = [];
   const errors: any[] = [];
 
@@ -141,7 +161,7 @@ export async function syncRemoteComponents(url: string): Promise<{ components: C
       });
     } catch (e) {
       errors.push(e);
-      console.warn("Malformed JSON in remote block:", jsonStr.substring(0, 50) + "...");
+      console.warn("Malformed JSON in remote block. Cleaned String:\n", jsonStr);
     }
   }
 
