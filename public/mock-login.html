@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mock SSO Login Gateway</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+      max-width: 400px;
+    }
+    h1 { color: #334155; font-size: 20px; margin-top: 0; }
+    p { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    button:hover { background: #1d4ed8; }
+    #success-state {
+      display: none;
+      color: #10b981;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Acme Corp Single Sign-On</h1>
+    <p>Please log in to access internal documentation and style guides.</p>
+    <button id="login-btn">Log In via SSO</button>
+    <div id="success-state">
+      ✓ Login Successful!<br>
+      <span style="font-size: 12px; color: #64748b; font-weight: normal; display: block; margin-top: 8px;">
+        You can now close this tab and return to the UI Validator.
+      </span>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('login-btn').addEventListener('click', () => {
+      // Broadcast success so the UI Validator content script can tunnel it to chrome.storage
+      window.postMessage({ type: 'MOCK_LOGIN_SUCCESS' }, '*');
+      document.getElementById('login-btn').style.display = 'none';
+      document.getElementById('success-state').style.display = 'block';
+    });
+  </script>
+
+</body>
+</html>

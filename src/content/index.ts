@@ -489,3 +489,10 @@ chrome.runtime.onMessage.addListener(
 
 export { };
 
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'MOCK_LOGIN_SUCCESS') {
+    if (chrome?.storage?.local) {
+      chrome.storage.local.set({ mock_auth_success: true });
+    }
+  }
+});

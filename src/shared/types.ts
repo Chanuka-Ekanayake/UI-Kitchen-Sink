@@ -34,6 +34,8 @@ export interface Profile {
   id: string;
   name: string;
   components: ComponentBlock[];
+  sourceUrl?: string;
+  lastSyncDate?: string;
 }
 
 export interface PropertyResult {

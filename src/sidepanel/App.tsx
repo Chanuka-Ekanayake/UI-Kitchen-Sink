@@ -15,6 +15,7 @@ import { Plus, Download, Upload, FileText } from 'lucide-react';
 import { sendTabMessage } from '../shared/messaging';
 import { exportProfile, handleImportFile } from './utils/serialization';
 import { handleCssImportFile } from './utils/cssImporter';
+import { syncRemoteComponents, AuthError } from './utils/remoteScraper';
 import {
   processImport,
   MergeConflict,
@@ -257,6 +258,76 @@ export default function App() {
     }
   };
 
+  const handleRemoteSync = async (url: string) => {
+    if (!activeProfile) return;
+    
+    // Attempt fetch
+    const { components: fetchedComponents, errors } = await syncRemoteComponents(url);
+
+    if (errors.length > 0) {
+      console.warn(`Scraped ${fetchedComponents.length} components, but encountered ${errors.length} malformed blocks.`);
+    }
+    
+    if (fetchedComponents.length === 0 && errors.length === 0) {
+      throw new Error("No UI Validator components found at this URL. Ensure the page contains the !!UI-VAL-DATA!! tag.");
+    }
+
+    // Mock a profile to trigger merge engine
+    const remoteProfile: Profile = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      name: `Remote Import`,
+      components: fetchedComponents,
+      sourceUrl: url,
+      lastSyncDate: new Date().toISOString()
+    };
+
+    const isRefreshedUrl = url === activeProfile.sourceUrl;
+
+    if (!isRefreshedUrl) {
+      // It's a new URL or first time sync. Let the user decide Merge vs. New
+      setPendingImportData(remoteProfile);
+      setPendingSourceType('json');
+      return; 
+    }
+
+    // Refresh Mode: Bypass selection modal and directly merge into active profile
+    const { updatedProfiles, pendingConflicts, summary } = processImport({
+      importedProfile: remoteProfile,
+      existingProfiles: profiles,
+      targetProfileId: activeProfile.id,
+      mode: 'APPEND'
+    });
+
+    if (pendingConflicts.length > 0) {
+      setImportedProfileCache(remoteProfile);
+      setMergeTargetId(activeProfile.id);
+      setPendingConflicts(pendingConflicts);
+      setMergeMode('APPEND');
+      setPendingSourceType('json');
+    } else {
+      // Direct success
+      let finalProfiles = updatedProfiles;
+      const nextActive = finalProfiles.find(p => p.id === activeProfile.id);
+      if (nextActive) {
+        // Set sync metadata
+        nextActive.sourceUrl = url;
+        nextActive.lastSyncDate = new Date().toISOString();
+        setProfiles(finalProfiles);
+        
+        setImportSummaryData({
+          addedCount: summary.addedCount,
+          skippedCount: summary.skippedCount,
+          conflictsResolved: summary.conflictsResolved,
+          mode: 'merge',
+          targetProfileName: nextActive.name,
+          ignoredSelectors: [],
+          isCss: false,
+        });
+        showToast(`Remote sync complete. ${summary.addedCount} added, ${summary.conflictsResolved} updated.`);
+      }
+    }
+  };
+
   const handleModeChange = (newMode: AppMode) => {
     if (newMode === currentMode) return;
     setCurrentMode(newMode);
@@ -392,7 +463,16 @@ export default function App() {
       setPartialResolutions({});
       setPendingConflicts(result.pendingConflicts);
     } else {
-      setProfiles(result.updatedProfiles);
+      // Propagate source URL if present
+      let finalProfiles = result.updatedProfiles;
+      if (pendingImportData.sourceUrl) {
+        finalProfiles = finalProfiles.map(p => 
+          p.id === activeProfileId 
+            ? { ...p, sourceUrl: pendingImportData.sourceUrl, lastSyncDate: pendingImportData.lastSyncDate } 
+            : p
+        );
+      }
+      setProfiles(finalProfiles);
       setActiveProfileId(result.newActiveProfileId);
       const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
       // Flash-highlight the newly added component IDs
@@ -402,7 +482,7 @@ export default function App() {
       setNewlyAddedIds(addedIds);
       setTimeout(() => setNewlyAddedIds(new Set()), 2500);
       // Show diagnostic modal
-      const targetProfile = result.updatedProfiles.find(p => p.id === result.newActiveProfileId);
+      const targetProfile = finalProfiles.find(p => p.id === result.newActiveProfileId);
       setImportSummaryData({
         mode: 'merge',
         targetProfileName: targetProfile?.name ?? 'Active Profile',
@@ -413,6 +493,8 @@ export default function App() {
         isCss: pendingSourceType === 'css',
       });
     }
+
+    // Critically guarantee state is reset
     setPendingImportData(null);
     setPendingIgnoredSelectors([]);
   };
@@ -437,7 +519,16 @@ export default function App() {
       mode: mergeMode,
       resolutions: allResolutions,
     });
-    setProfiles(result.updatedProfiles);
+    // Propagate source URL if present
+    let finalProfiles = result.updatedProfiles;
+    if (importedProfileCache.sourceUrl) {
+      finalProfiles = finalProfiles.map(p => 
+        p.id === mergeTargetId 
+          ? { ...p, sourceUrl: importedProfileCache.sourceUrl, lastSyncDate: importedProfileCache.lastSyncDate } 
+          : p
+      );
+    }
+    setProfiles(finalProfiles);
     setActiveProfileId(result.newActiveProfileId);
     const { addedCount, skippedCount, conflictsResolved, finalComponents } = result.summary;
     // Flash-highlight newly added components
@@ -461,6 +552,19 @@ export default function App() {
     setPendingConflicts([]);
     setImportedProfileCache(null);
     setPartialResolutions({});
+
+    // Toast feedback based on resolutions
+    const resolvedKeys = Object.keys(resolutions);
+    if (resolvedKeys.length === 1) {
+      const conflictId = resolvedKeys[0];
+      const updatedCompId = conflictId.split('__')[1]; // ID of the incoming component that was selected
+      const compName = importedProfileCache.components.find(c => c.id === updatedCompId)?.name || 'Components';
+      showToast(`Component ${compName} successfully updated.`);
+    } else if (resolvedKeys.length > 1) {
+      showToast(`Component conflicts successfully updated (${resolvedKeys.length}).`);
+    } else {
+      showToast(`Profile updated successfully.`);
+    }
   };
 
   const handleImportCancel = () => {
@@ -750,7 +854,7 @@ export default function App() {
                   </>
                 ) : (
                   <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
-                    <RemoteSyncPanel />
+                    <RemoteSyncPanel activeProfile={activeProfile} onSync={handleRemoteSync} />
                     <LiveScrapePanel />
                   </div>
                 )}
@@ -758,39 +862,41 @@ export default function App() {
             )}
 
             <div className="shrink-0 w-full pt-4 mt-auto border-t border-slate-100 flex flex-col gap-2">
-              {/* Import / Export row */}
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  title="Import a profile from a .json file"
-                >
-                  <Upload size={13} />
-                  {isImporting ? 'Importing…' : 'JSON'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cssFileInputRef.current?.click()}
-                  disabled={isImporting}
-                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  title="Convert a .css file into components"
-                >
-                  <Upload size={13} />
-                  CSS
-                </button>
-                <button
-                  type="button"
-                  onClick={exportActiveProfile}
-                  disabled={!activeProfile}
-                  className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  title="Export active profile as JSON"
-                >
-                  <Download size={13} />
-                  Export
-                </button>
-              </div>
+              {/* Import / Export row (Only in DEV Mode) */}
+              {currentMode === 'DEV' && (
+                <div className="flex gap-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    title="Import a profile from a .json file"
+                  >
+                    <Upload size={13} />
+                    {isImporting ? 'Importing…' : 'JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cssFileInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    title="Convert a .css file into components"
+                  >
+                    <Upload size={13} />
+                    CSS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportActiveProfile}
+                    disabled={!activeProfile}
+                    className="flex items-center justify-center gap-1.5 flex-1 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:border-[#008000]/50 hover:text-[#008000] hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    title="Export active profile as JSON"
+                  >
+                    <Download size={13} />
+                    Export
+                  </button>
+                </div>
+              )}
 
               <button
                 onClick={handleScan}
