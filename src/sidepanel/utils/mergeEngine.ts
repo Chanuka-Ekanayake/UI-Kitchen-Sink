@@ -156,6 +156,7 @@ export function processImport(opts: ProcessImportOptions): ProcessImportResult {
       const cmp = compareComponents(existing, incoming);
       if (cmp === 'EXACT_DUPLICATE') {
         outcome = 'EXACT_DUPLICATE';
+        conflictingExisting = existing;
         break;
       }
       if (cmp === 'SELECTOR_CONFLICT') {
@@ -166,6 +167,16 @@ export function processImport(opts: ProcessImportOptions): ProcessImportResult {
     }
 
     if (outcome === 'EXACT_DUPLICATE') {
+      if (conflictingExisting && conflictingExisting.name !== incoming.name) {
+        // Auto-update the display name even if styles are mathematically identical
+        const idx = mergedComponents.findIndex(c => c.id === conflictingExisting!.id);
+        if (idx !== -1) {
+          mergedComponents[idx] = {
+            ...mergedComponents[idx],
+            name: incoming.name,
+          };
+        }
+      }
       skippedCount++;
       continue;
     }
@@ -192,6 +203,7 @@ export function processImport(opts: ProcessImportOptions): ProcessImportResult {
         if (idx !== -1) {
           mergedComponents[idx] = {
             ...conflictingExisting,
+            name: incoming.name,
             styleRules: incoming.styleRules,
           };
         }
