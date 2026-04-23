@@ -1,5 +1,4 @@
-# UI-Kitchen-Sink
-UI Kitchen Sink is a professional browser extension designed to automate the validation of design system standards against live, rendered web pages. Built for the modern web, it handles complex authentication (SSO/2FA) by running directly in the user's browser, providing a real-time "UI Health Score" for any application.
+# Validator is a professional browser extension designed to automate the validation of design system standards against live, rendered web pages. Built for the modern web, it handles complex authentication (SSO/2FA) by running directly in the user's browser, providing a real-time "UI Health Score" for any application.
 
 ---
 

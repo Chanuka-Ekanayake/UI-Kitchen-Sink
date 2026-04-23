@@ -178,12 +178,6 @@ export default function App() {
 
     const nextProfiles = profiles.filter(p => p.id !== idToDelete);
 
-    console.group('Profile Deletion');
-    console.log(`1. Profile being deleted: ${idToDelete}`);
-    console.log(`2. New profile being selected as active: ${nextActiveId}`);
-    console.log(`3. Final length of the profiles array: ${nextProfiles.length}`);
-    console.groupEnd();
-
     // Sequential State Update with flushSync
     flushSync(() => {
       setActiveProfileId(nextActiveId);
@@ -510,7 +504,6 @@ export default function App() {
       }
 
       if (!isInjected) {
-        console.log('[UI Scanner] Injecting content script...');
         try {
           const manifest = chrome.runtime.getManifest();
           const contentScriptPath = manifest.content_scripts?.[0]?.js?.[0];
@@ -563,10 +556,6 @@ export default function App() {
       };
 
       const dynamicStandards = mapStateToScannerFormat(enabledComponents);
-      dynamicStandards.forEach(std => {
-        console.log(`[Universal Scanner] Targeting: "${std.selector}"`);
-      });
-
       for (const std of dynamicStandards) {
         try {
           document.createDocumentFragment().querySelector(std.selector);

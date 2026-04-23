@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((request: ScannerMessage, sender, sendRespo
       .then((tabs) => {
         if (tabs.length > 0 && tabs[0].id) {
           const contentAction = request.action === 'RELAY_HIGHLIGHT' ? 'HIGHLIGHT_ELEMENT' : 'CLEAR_HIGHLIGHT';
-          
+
           chrome.tabs.sendMessage(tabs[0].id, {
             action: contentAction,
             payload: request.action === 'RELAY_HIGHLIGHT' ? request.payload : undefined
