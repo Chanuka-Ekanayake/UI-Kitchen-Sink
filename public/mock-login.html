@@ -49,7 +49,7 @@
   <div class="card">
     <h1>Acme Corp Single Sign-On</h1>
     <p>Please log in to access internal documentation and style guides.</p>
-    <button id="login-btn">Log In via SSO</button>
+    <button id="login-btn">Simulate Login</button>
     <div id="success-state">
       ✓ Login Successful!<br>
       <span style="font-size: 12px; color: #64748b; font-weight: normal; display: block; margin-top: 8px;">
@@ -61,7 +61,7 @@
   <script>
     document.getElementById('login-btn').addEventListener('click', () => {
       // Broadcast success so the UI Validator content script can tunnel it to chrome.storage
-      window.postMessage({ type: 'MOCK_LOGIN_SUCCESS' }, '*');
+      window.postMessage({ type: 'MOCK_LOGIN_ACTIVE' }, '*');
       document.getElementById('login-btn').style.display = 'none';
       document.getElementById('success-state').style.display = 'block';
     });

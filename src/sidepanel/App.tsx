@@ -260,6 +260,10 @@ export default function App() {
 
   const handleRemoteSync = async (url: string) => {
     if (!activeProfile) return;
+
+    // Explicitly reset the 'Selection Modal' buffer so retries or concurrent syncs don't ghost
+    setPendingImportData(null);
+    setPendingIgnoredSelectors([]);
     
     // Attempt fetch
     const { components: fetchedComponents, errors } = await syncRemoteComponents(url);
