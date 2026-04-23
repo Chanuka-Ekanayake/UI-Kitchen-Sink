@@ -59,3 +59,5 @@ export type ScannerMessage =
   | { action: 'RELAY_HIGHLIGHT'; payload: { selector: string; isPassed: boolean; state?: string } }
   | { action: 'RELAY_CLEAR' }
   | { action: 'CLEAR_HIGHLIGHT' };
+
+export type AppMode = 'DEV' | 'NORMAL';
